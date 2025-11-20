@@ -120,7 +120,7 @@
 
       <div class="stats">
         <div class="stat">
-          <div class="v" id="stonesVal">0</div>
+          <div class="v" id="gemsVal">0</div>
           <div class="sub">Linh thạch</div>
         </div>
         <div class="stat">
@@ -166,7 +166,7 @@
     let state = {
       level:1,
       rate:1, // per second
-      stones:0,
+      gems:0,
       cost:100,
       farming:false,
       farmEnd:0, // timestamp when farm session ends
@@ -188,7 +188,7 @@
     // --- DOM ---
     const lvl = document.getElementById('levelTxt');
     const costVal = document.getElementById('costVal');
-    const stonesVal = document.getElementById('stonesVal');
+    const gemsVal = document.getElementById('gemsVal');
     const rateVal = document.getElementById('rateVal');
     const offlineVal = document.getElementById('offlineVal');
     const startBtn = document.getElementById('startBtn');
@@ -233,7 +233,7 @@
     function updateUI(){
       lvl.innerText = 'Lv. ' + state.level;
       costVal.innerText = state.cost;
-      stonesVal.innerText = Math.floor(state.stones);
+      gemsVal.innerText = Math.floor(state.gems);
       rateVal.innerText = Math.round(state.rate*100)/100 + ' /s';
       offlineVal.innerText = Math.round(state.offlineBonus*100)/100;
       upgradeBtn.innerText = `Nâng cấp (${state.cost})`;
@@ -260,7 +260,7 @@
       // handle farming produce
       if(state.farming && state.farmEnd > Date.now()){
         const produce = state.rate * dt;
-        state.stones += produce;
+        state.gems += produce;
         // visual sparkles
         for(let i=0;i<Math.min(3,Math.ceil(produce));i++){
           spawnSpark(40 + Math.random()*50, 20 + Math.random()*50);
@@ -281,7 +281,7 @@
       const down = Math.floor((now - last)/1000);
       if(down > 10 && !state.farming){
         const offline = Math.min(3600, Math.floor(down/2) * state.rate); // simple offline cap
-        state.stones += offline;
+        state.gems += offline;
         state.offlineBonus += offline;
         showToast(`Bạn nhận ${Math.round(offline)} linh thạch khi offline`);
         updateUI(); save();
@@ -342,8 +342,8 @@
 
     // Upgrade
     upgradeBtn.addEventListener('click', ()=>{
-      if(state.stones >= state.cost){
-        state.stones -= state.cost;
+      if(state.gems >= state.cost){
+        state.gems -= state.cost;
         state.level += 1;
         // speed growth ~1.22x
         state.rate = Math.round((state.rate * 1.22 + 0.01) * 100)/100;
@@ -356,7 +356,7 @@
         showToast('Không đủ linh thạch');
       }
     });
-    // Handle menu and leaderboard button
+// Khi nhấn vào nút "Xếp Hạng"
 document.getElementById('leaderBtn').onclick = async () => {
   // Gửi yêu cầu đến API để lấy bảng xếp hạng
   try {
@@ -364,7 +364,7 @@ document.getElementById('leaderBtn').onclick = async () => {
     const leaderboard = await response.json();
 
     // Tạo nội dung bảng xếp hạng
-    let leaderboardContent = '<div style="font-weight:700">Bảng Xếp Hạng</div>';
+    let leaderboardContent = '<div style="font-weight:700; font-size:18px; margin-bottom:10px;">Bảng Xếp Hạng</div>';
     leaderboard.forEach((player, index) => {
       leaderboardContent += `
         <div style="margin-top:8px">#${index + 1} - ${player.username}: ${player.gems} linh thạch</div>
@@ -390,7 +390,7 @@ document.getElementById('leaderBtn').onclick = async () => {
   }
 };
 
-// Modal helper
+// Hàm để hiển thị modal
 function showModal(inner) {
   modalRoot.style.display = 'block';
   modalRoot.innerHTML = `<div class='modal-backdrop'>
@@ -400,24 +400,12 @@ function showModal(inner) {
                          </div>`; // hiển thị modal
 }
 
+// Hàm để đóng modal
 function closeModal() {
   modalRoot.style.display = 'none';
   modalRoot.innerHTML = '';
 }
 
-
-// Modal helper
-function showModal(inner) {
-  modalRoot.style.display = 'block';
-  modalRoot.innerHTML = `<div class='modal-backdrop'><div class='modal'>${inner}</div></div>`; // hiển thị modal
-  const close = document.querySelector('.modal #close');
-  if (close) close.onclick = closeModal;
-}
-
-function closeModal() {
-  modalRoot.style.display = 'none';
-  modalRoot.innerHTML = '';
-}
 
     // simple menu handlers
     document.getElementById('tasksBtn').onclick = ()=>{ 
@@ -430,11 +418,11 @@ function closeModal() {
         const wb = document.getElementById('watchBuff');
         const bb = document.getElementById('buyBuff');
         if(wb) wb.onclick = async ()=>{ closeModal(); const ok = await showAdFlow(5); if(ok){ applyBuff(2,30); showToast('Buff x2 (30s) kích hoạt'); } };
-        if(bb) bb.onclick = ()=>{ if(state.stones>=200){ state.stones-=200; applyBuff(5,10); showToast('Buff x5 (10s) kích hoạt'); save(); updateUI(); closeModal(); } else showToast('Không đủ linh thạch'); };
+        if(bb) bb.onclick = ()=>{ if(state.gems>=200){ state.gems-=200; applyBuff(5,10); showToast('Buff x5 (10s) kích hoạt'); save(); updateUI(); closeModal(); } else showToast('Không đủ linh thạch'); };
       },50);
     };
     document.getElementById('inviteBtn').onclick = ()=>{ showToast('Chức năng mời bạn bè chưa kết nối (demo)'); };
-    document.getElementById('storeBtn').onclick = ()=>{ showModal(`<div style='font-weight:700'>Quy đổi</div><div style='margin-top:8px'>Đổi linh thạch lấy quà (demo)</div><div style='display:flex;gap:8px;margin-top:12px'><button id='c1' class='btn' style='flex:1'>Đổi 100 → 10 gem</button><button id='c2' class='btn secondary' style='flex:1'>Đóng</button></div>`); setTimeout(()=>{ document.getElementById('c1').onclick = ()=>{ if(state.stones>=100){ state.stones-=100; showToast('Đổi thành công!'); save(); updateUI(); closeModal(); } else showToast('Không đủ linh thạch'); }; document.getElementById('c2').onclick = closeModal; },50); };
+    document.getElementById('storeBtn').onclick = ()=>{ showModal(`<div style='font-weight:700'>Quy đổi</div><div style='margin-top:8px'>Đổi linh thạch lấy quà (demo)</div><div style='display:flex;gap:8px;margin-top:12px'><button id='c1' class='btn' style='flex:1'>Đổi 100 → 10 gem</button><button id='c2' class='btn secondary' style='flex:1'>Đóng</button></div>`); setTimeout(()=>{ document.getElementById('c1').onclick = ()=>{ if(state.gems>=100){ state.gems-=100; showToast('Đổi thành công!'); save(); updateUI(); closeModal(); } else showToast('Không đủ linh thạch'); }; document.getElementById('c2').onclick = closeModal; },50); };
 
     // modal helper
     function showModal(inner){ modalRoot.style.display='block'; modalRoot.innerHTML = `<div class='modal-backdrop'><div class='modal'>${inner}</div></div>`; // attach basic close
