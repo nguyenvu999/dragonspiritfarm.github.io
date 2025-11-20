@@ -1,81 +1,133 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const app = express();
+import express from "express";
+import mongoose from "mongoose";
+import cors from "cors";
 
-// Sử dụng middleware
+const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Kết nối đến MongoDB Atlas
-mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  console.log('Đã kết nối đến MongoDB Atlas');
-}).catch((error) => {
-  console.error('Lỗi kết nối MongoDB:', error);
-});
+// ======================
+//  MongoDB Connect
+// ======================
+const MONGO_URL =
+  "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";
 
-// Cấu hình schema cho dữ liệu người chơi
-const playerSchema = new mongoose.Schema({
-  username: { type: String, required: true },
-  userId: { type: String, required: true, unique: true },
-  gems: { type: Number, default: 0 },
-  rank: { type: Number, default: 0 }
-});
+mongoose
+  .connect(MONGO_URL)
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.error("MongoDB error:", err));
 
-// Tạo model cho người chơi
-const Player = mongoose.model('Player', playerSchema);
+// ======================
+//  Schema
+// ======================
+const PlayerSchema = new mongoose.Schema(
+  {
+    userId: { type: String, unique: true },
+    username: String,
+    firstName: String,
+    lastName: String,
+    gems: { type: Number, default: 0 },
+    level: { type: Number, default: 1 },
+  },
+  { timestamps: true }
+);
 
-// API để cập nhật thông tin người chơi
-app.post('/update-player', async (req, res) => {
-  const { userId, username, gems } = req.body;
+const Player = mongoose.model("Player", PlayerSchema);
 
+// ======================
+//  GET PLAYER
+// ======================
+app.get("/player/:id", async (req, res) => {
   try {
+    const userId = req.params.id;
+
     let player = await Player.findOne({ userId });
 
-    if (player) {
-      // Cập nhật thông tin người chơi hiện có
-      player.gems = gems;
-      player.username = username;
+    if (!player) {
+      return res.json({ success: false, message: "not found" });
+    }
+
+    return res.json({
+      success: true,
+      player,
+    });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
+  }
+});
+
+// ======================
+//  SYNC DATA
+// ======================
+app.post("/sync", async (req, res) => {
+  try {
+    const { userId, username, firstName, lastName, gems, level } = req.body;
+
+    if (!userId)
+      return res.json({ success: false, message: "Missing userId" });
+
+    let player = await Player.findOne({ userId });
+
+    if (!player) {
+      // tạo mới
+      player = new Player({
+        userId,
+        username,
+        firstName,
+        lastName,
+        gems: gems || 0,
+        level: level || 1,
+      });
+
       await player.save();
     } else {
-      // Tạo người chơi mới
-      player = new Player({ userId, username, gems });
+      // cập nhật
+      if (gems > player.gems) player.gems = gems;
+      if (level > player.level) player.level = level;
+
+      if (username) player.username = username;
+      if (firstName) player.firstName = firstName;
+      if (lastName) player.lastName = lastName;
+
       await player.save();
     }
 
-    res.status(200).send('Thông tin người chơi đã được cập nhật');
-  } catch (error) {
-    res.status(500).send('Lỗi server');
+    return res.json({
+      success: true,
+      gems: player.gems,
+      level: player.level,
+    });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
   }
 });
 
-// API để lấy bảng xếp hạng
-app.get('/leaderboard', async (req, res) => {
+// ======================
+//  Leaderboard
+// ======================
+app.get("/leaderboard", async (req, res) => {
   try {
-    const leaderboard = await Player.find().sort({ gems: -1 }).limit(10);
-    res.status(200).json(leaderboard);
-  } catch (error) {
-    res.status(500).send('Lỗi server');
+    const list = await Player.find().sort({ gems: -1 }).limit(50);
+
+    return res.json({
+      success: true,
+      leaderboard: list.map((p) => ({
+        userId: p.userId,
+        username: p.username || "Player",
+        gems: p.gems,
+        level: p.level,
+      })),
+    });
+  } catch (e) {
+    console.error(e);
+    res.json({ success: false });
   }
 });
 
-// API để lấy thông tin của một người chơi theo userId
-app.get('/player/:userId', async (req, res) => {
-  try {
-    const player = await Player.findOne({ userId: req.params.userId });
-    if (!player) {
-      return res.status(404).send('Không tìm thấy người chơi');
-    }
-    res.status(200).json(player);
-  } catch (error) {
-    res.status(500).send('Lỗi server');
-  }
-});
-
-// Khởi chạy server
-app.listen(3000, () => {
-  console.log('Server đang chạy tại http://localhost:3000');
-});
+// ======================
+//  START SERVER
+// ======================
+const PORT = 3000;
+app.listen(PORT, () => console.log(`Server running at port ${PORT}`));
