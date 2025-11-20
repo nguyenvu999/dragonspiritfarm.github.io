@@ -67,11 +67,6 @@
     /* responsive */
     @media (min-width:560px){.app{transform:scale(1);}}
 
-    /* small UI flourishes */
-    .pulse{animation:pulse 1.6s infinite}
-    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.02)}100%{transform:scale(1)}}
-
-    .glow{box-shadow:0 8px 30px rgba(122,252,255,0.06),0 0 30px rgba(255,204,51,0.06)}
 
     .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:#04293a;padding:10px 14px;border-radius:8px;color:#eaffff}
   </style>
@@ -154,15 +149,14 @@
         <div class="item" id="buffBtn">✨ Buff</div>
         <div class="item" id="inviteBtn">👥 Mời Bạn Bè</div>
         <div class="item" id="storeBtn">🏪 Quy Đổi</div>
+        <div class="item" id="leaderBtn">🏆 Xếp Hạng</div>
       </div>
     </div>
-
   </div>
 
   <!-- modal area -->
   <div id="modalRoot" style="display:none"></div>
   <div id="toastRoot" style="display:none"></div>
-
   <script>
     // Tiny polished single-file game: Dragon Spirit Farm
     // Save/load state in localStorage. Uses no external libs so you can paste into a Telegram WebApp.
@@ -364,10 +358,10 @@
     });
 
     // simple menu handlers
-    document.getElementById('tasksBtn').onclick = ()=>{
+    document.getElementById('tasksBtn').onclick = ()=>{ 
       showModal(`\n        <div style='font-weight:700'>Nhiệm vụ</div>\n        <div style='margin-top:8px'>- Tạo 500 linh thạch → thưởng 50<br>- Xem 3 quảng cáo → thưởng 200<br>- Nâng cấp 5 lần → thưởng 300</div>\n        <div style='margin-top:12px;display:flex;gap:8px'><button id='close' class='btn' style='flex:1'>Đóng</button></div>`);
     };
-    document.getElementById('buffBtn').onclick = ()=>{
+    document.getElementById('buffBtn').onclick = ()=>{ 
       showModal(`\n        <div style='font-weight:700'>Buff</div>\n        <div style='margin-top:8px'>Một số buff ngắn hạn: x2 tốc độ (30s), x5 tốc độ (10s).<br>Bạn có thể mua bằng linh thạch hoặc nhận thử qua quảng cáo.</div>\n        <div style='margin-top:12px;display:flex;gap:8px'>\n          <button id='watchBuff' class='btn secondary' style='flex:1'>Xem QC để thử</button>\n          <button id='buyBuff' class='btn' style='flex:1'>Mua (200)</button>\n        </div>`);
       // delegate events
       setTimeout(()=>{
