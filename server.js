@@ -7,13 +7,17 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Kết nối MongoDB (Cần có MongoDB URI)
-mongoose.connect('mongodb://localhost:27017/dragon_game', {
+// Kết nối đến MongoDB Atlas
+mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
   useNewUrlParser: true,
   useUnifiedTopology: true
+}).then(() => {
+  console.log('Đã kết nối đến MongoDB Atlas');
+}).catch((error) => {
+  console.error('Lỗi kết nối MongoDB:', error);
 });
 
-// Cấu hình schema cho người chơi
+// Cấu hình schema cho dữ liệu người chơi
 const playerSchema = new mongoose.Schema({
   username: { type: String, required: true },
   userId: { type: String, required: true, unique: true },
@@ -21,9 +25,10 @@ const playerSchema = new mongoose.Schema({
   rank: { type: Number, default: 0 }
 });
 
+// Tạo model cho người chơi
 const Player = mongoose.model('Player', playerSchema);
 
-// API để lưu trữ thông tin người chơi
+// API để cập nhật thông tin người chơi
 app.post('/update-player', async (req, res) => {
   const { userId, username, gems } = req.body;
 
@@ -31,12 +36,12 @@ app.post('/update-player', async (req, res) => {
     let player = await Player.findOne({ userId });
 
     if (player) {
-      // Nếu người chơi đã tồn tại, cập nhật thông tin
+      // Cập nhật thông tin người chơi hiện có
       player.gems = gems;
       player.username = username;
       await player.save();
     } else {
-      // Nếu người chơi chưa tồn tại, tạo mới
+      // Tạo người chơi mới
       player = new Player({ userId, username, gems });
       await player.save();
     }
@@ -57,7 +62,7 @@ app.get('/leaderboard', async (req, res) => {
   }
 });
 
-// API để lấy thông tin của một người chơi
+// API để lấy thông tin của một người chơi theo userId
 app.get('/player/:userId', async (req, res) => {
   try {
     const player = await Player.findOne({ userId: req.params.userId });

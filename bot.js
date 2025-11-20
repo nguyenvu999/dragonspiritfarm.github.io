@@ -4,10 +4,14 @@ const mongoose = require('mongoose');
 // Khởi tạo bot với token
 const bot = new Telegraf('8347563664:AAGHVOfLRid7CQHDC0HHcvpFZZvhfxenpCQ');  // Thay 'YOUR_BOT_TOKEN' bằng token bot của bạn
 
-// Kết nối MongoDB với cơ sở dữ liệu dragon_game
-mongoose.connect('mongodb://localhost:27017/dragon_game', {
+// Kết nối MongoDB Atlas
+mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
   useNewUrlParser: true,
   useUnifiedTopology: true
+}).then(() => {
+  console.log('Kết nối MongoDB Atlas thành công');
+}).catch((error) => {
+  console.error('Lỗi kết nối MongoDB:', error);
 });
 
 // Cấu hình schema cho người chơi (Player)
@@ -20,7 +24,7 @@ const playerSchema = new mongoose.Schema({
   level: { type: Number, default: 1 }
 });
 
-// Đảm bảo lưu vào collection 'player'
+// Tạo model cho người chơi
 const Player = mongoose.model('Player', playerSchema, 'player');
 
 // Lệnh /start
@@ -58,11 +62,21 @@ bot.command('play', (ctx) => {
   });
 });
 
-// Xử lý callback từ bảng xếp hạng
-bot.on('callback_query', (ctx) => {
-  if (ctx.callbackQuery.data === 'leaderboard') {
-    ctx.answerCbQuery('Bảng xếp hạng sẽ được hiển thị!');
-    // Thêm logic để hiển thị bảng xếp hạng (Có thể từ API hoặc cơ sở dữ liệu của bạn)
+// Lệnh /leaderboard - Bảng xếp hạng
+bot.command('leaderboard', async (ctx) => {
+  try {
+    const response = await fetch('http://localhost:3000/leaderboard');
+    const leaderboard = await response.json();
+
+    // Tạo bảng xếp hạng
+    let leaderboardContent = '<b>Bảng Xếp Hạng:</b>\n';
+    leaderboard.forEach((player, index) => {
+      leaderboardContent += `#${index + 1} - ${player.username}: ${player.gems} linh thạch\n`;
+    });
+
+    ctx.reply(leaderboardContent, { parse_mode: 'HTML' });
+  } catch (error) {
+    ctx.reply('Không thể tải bảng xếp hạng.');
   }
 });
 
@@ -70,3 +84,4 @@ bot.on('callback_query', (ctx) => {
 bot.launch().then(() => {
   console.log("Bot đang hoạt động...");
 });
+    
