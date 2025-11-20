@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: dragon-spirit-app
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
