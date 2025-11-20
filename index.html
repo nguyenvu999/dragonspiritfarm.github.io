@@ -158,243 +158,276 @@
   <div id="modalRoot" style="display:none"></div>
   <div id="toastRoot" style="display:none"></div>
   <script>
-    // Tiny polished single-file game: Dragon Spirit Farm
-    // Save/load state in localStorage. Uses no external libs so you can paste into a Telegram WebApp.
+// Tiny polished single-file game: Dragon Spirit Farm
+// Save/load state in localStorage. Uses no external libs so you can paste into a Telegram WebApp.
 
-    // --- state ---
-    const KEY = 'dragon_spirit_save_v1';
-    let state = {
-      level:1,
-      rate:1, // per second
-      stones:0,
-      cost:100,
-      farming:false,
-      farmEnd:0, // timestamp when farm session ends
-      farmDuration:0,
-      offlineBonus:0,
-      buffs:[],
-      lastTick: Date.now()
-    };
+// --- state ---
+const KEY = 'dragon_spirit_save_v1';
+let state = {
+  level: 1,
+  rate: 1, // per second
+  stones: 0,
+  cost: 100,
+  farming: false,
+  farmEnd: 0, // timestamp when farm session ends
+  farmDuration: 0,
+  offlineBonus: 0,
+  buffs: [],
+  lastTick: Date.now()
+};
 
-    // load
-    try{
-      const raw = localStorage.getItem(KEY);
-      if(raw){
-        const o = JSON.parse(raw);
-        Object.assign(state,o);
-      }
-    }catch(e){console.warn(e)}
+// load
+try {
+  const raw = localStorage.getItem(KEY);
+  if (raw) {
+    const o = JSON.parse(raw);
+    Object.assign(state, o);
+  }
+} catch (e) {
+  console.warn(e);
+}
 
-    // --- DOM ---
-    const lvl = document.getElementById('levelTxt');
-    const costVal = document.getElementById('costVal');
-    const stonesVal = document.getElementById('stonesVal');
-    const rateVal = document.getElementById('rateVal');
-    const offlineVal = document.getElementById('offlineVal');
-    const startBtn = document.getElementById('startBtn');
-    const upgradeBtn = document.getElementById('upgradeBtn');
-    const farmBanner = document.getElementById('farmBanner');
-    const progressBar = document.getElementById('progressBar');
-    const durationText = document.getElementById('durationText');
-    const sparkleLayer = document.getElementById('sparkle-layer');
-    const modalRoot = document.getElementById('modalRoot');
-    const toastRoot = document.getElementById('toastRoot');
+// --- DOM ---
+const lvl = document.getElementById('levelTxt');
+const costVal = document.getElementById('costVal');
+const stonesVal = document.getElementById('stonesVal');
+const rateVal = document.getElementById('rateVal');
+const offlineVal = document.getElementById('offlineVal');
+const startBtn = document.getElementById('startBtn');
+const upgradeBtn = document.getElementById('upgradeBtn');
+const farmBanner = document.getElementById('farmBanner');
+const progressBar = document.getElementById('progressBar');
+const durationText = document.getElementById('durationText');
+const sparkleLayer = document.getElementById('sparkle-layer');
+const modalRoot = document.getElementById('modalRoot');
+const toastRoot = document.getElementById('toastRoot');
 
-    // --- helpers ---
-    function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
-    function fmtTime(s){
-      s = Math.max(0, Math.floor(s));
-      const h = String(Math.floor(s/3600)).padStart(2,'0');
-      const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
-      const sec = String(s%60).padStart(2,'0');
-      return `${h}:${m}:${sec}`;
+// --- helpers ---
+function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function fmtTime(s) {
+  s = Math.max(0, Math.floor(s));
+  const h = String(Math.floor(s / 3600)).padStart(2, '0');
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const sec = String(s % 60).padStart(2, '0');
+  return `${h}:${m}:${sec}`;
+}
+
+function showToast(text, ttl = 2000) {
+  toastRoot.style.display = 'block';
+  toastRoot.innerHTML = `<div class='toast'>${text}</div>`;
+  setTimeout(() => { toastRoot.style.display = 'none'; }, ttl);
+}
+
+// Create tiny sparkle particle
+function spawnSpark(xPct, yPct) {
+  const el = document.createElement('div');
+  el.className = 'sparkle';
+  el.style.left = xPct + '%';
+  el.style.top = yPct + '%';
+  sparkleLayer.appendChild(el);
+  // animate
+  setTimeout(() => { el.style.opacity = 1; el.style.transform = 'scale(1)'; el.style.transition = 'all 600ms cubic-bezier(.2,.9,.3,1)'; }, 20);
+  setTimeout(() => { el.style.opacity = 0; el.style.transform = 'scale(1.6)'; }, 520);
+  setTimeout(() => { sparkleLayer.removeChild(el); }, 900);
+}
+
+// UI update
+function updateUI() {
+  lvl.innerText = 'Lv. ' + state.level;
+  costVal.innerText = state.cost;
+  stonesVal.innerText = Math.floor(state.stones);
+  rateVal.innerText = Math.round(state.rate * 100) / 100 + ' /s';
+  offlineVal.innerText = Math.round(state.offlineBonus * 100) / 100;
+  upgradeBtn.innerText = `Nâng cấp (${state.cost})`;
+  if (state.farming && state.farmEnd > Date.now()) {
+    farmBanner.style.display = 'flex';
+    const total = state.farmDuration;
+    const rem = Math.max(0, Math.floor((state.farmEnd - Date.now()) / 1000));
+    const done = total - rem;
+    const pct = Math.min(100, Math.round((done / total) * 100));
+    progressBar.style.width = pct + '%';
+    durationText.innerText = fmtTime(rem);
+  } else {
+    farmBanner.style.display = 'none';
+  }
+}
+
+updateUI();
+
+// tick: runs each second
+setInterval(() => {
+  const now = Date.now();
+  const dt = Math.floor((now - state.lastTick) / 1000);
+  if (dt <= 0) { state.lastTick = now; return; }
+  // handle farming produce
+  if (state.farming && state.farmEnd > Date.now()) {
+    const produce = state.rate * dt;
+    state.stones += produce;
+    // visual sparkles
+    for (let i = 0; i < Math.min(3, Math.ceil(produce)); i++) {
+      spawnSpark(40 + Math.random() * 50, 20 + Math.random() * 50);
     }
+  } else if (state.farming && state.farmEnd <= Date.now()) {
+    state.farming = false;
+    showToast('Phiên nuôi rồng hoàn thành!');
+  }
+  state.lastTick = now;
+  updateUI();
+  save();
+}, 1000);
 
-    function showToast(text,ttl=2000){
-      toastRoot.style.display='block';
-      toastRoot.innerHTML = `<div class='toast'>${text}</div>`;
-      setTimeout(()=>{toastRoot.style.display='none';}, ttl);
-    }
+// Physics: apply offline bonus when page is open again
+window.addEventListener('focus', () => {
+  const now = Date.now();
+  const last = state.lastTick || now;
+  const down = Math.floor((now - last) / 1000);
+  if (down > 10 && !state.farming) {
+    const offline = Math.min(3600, Math.floor(down / 2) * state.rate); // simple offline cap
+    state.stones += offline;
+    state.offlineBonus += offline;
+    showToast(`Bạn nhận ${Math.round(offline)} linh thạch khi offline`);
+    updateUI(); save();
+  }
+  state.lastTick = now;
+});
 
-    // Create tiny sparkle particle
-    function spawnSpark(xPct,yPct){
-      const el = document.createElement('div');
-      el.className='sparkle';
-      el.style.left = xPct + '%';
-      el.style.top = yPct + '%';
-      sparkleLayer.appendChild(el);
-      // animate
-      setTimeout(()=>{ el.style.opacity=1; el.style.transform='scale(1)'; el.style.transition='all 600ms cubic-bezier(.2,.9,.3,1)'; }, 20);
-      setTimeout(()=>{ el.style.opacity=0; el.style.transform='scale(1.6)'; }, 520);
-      setTimeout(()=>{ sparkleLayer.removeChild(el); }, 900);
-    }
+// fake rewarded ad flow
+function showAdFlow(durationSeconds = 8) {
+  return new Promise((resolve) => {
+    modalRoot.style.display = 'block';
+    modalRoot.innerHTML = `
+      <div class='modal-backdrop'>
+        <div class='modal'>
+          <div style='font-weight:700;font-size:16px'>Quảng cáo thưởng</div>
+          <div style='margin-top:8px;font-size:13px'>Xem quảng cáo để bắt đầu phiên nuôi rồng tự động (${durationSeconds}s)</div>
+          <div class='adbar'><i id='adBar' style='width:0%'></i></div>
+          <div style='display:flex;gap:10px;margin-top:12px'>
+            <button id='skipAd' class='btn secondary' style='flex:1'>Bỏ qua</button>
+            <button id='closeAd' class='btn' style='flex:1'>Ẩn</button>
+          </div>
+        </div>
+      </div>`;
 
-    // UI update
-    function updateUI(){
-      lvl.innerText = 'Lv. ' + state.level;
-      costVal.innerText = state.cost;
-      stonesVal.innerText = Math.floor(state.stones);
-      rateVal.innerText = Math.round(state.rate*100)/100 + ' /s';
-      offlineVal.innerText = Math.round(state.offlineBonus*100)/100;
-      upgradeBtn.innerText = `Nâng cấp (${state.cost})`;
-      if(state.farming && state.farmEnd > Date.now()){
-        farmBanner.style.display='flex';
-        const total = state.farmDuration;
-        const rem = Math.max(0, Math.floor((state.farmEnd - Date.now())/1000));
-        const done = total - rem;
-        const pct = Math.min(100, Math.round((done/total)*100));
-        progressBar.style.width = pct + '%';
-        durationText.innerText = fmtTime(rem);
-      } else {
-        farmBanner.style.display='none';
-      }
-    }
+    const adBar = document.getElementById('adBar');
+    const skipBtn = document.getElementById('skipAd');
+    const closeBtn = document.getElementById('closeAd');
 
-    updateUI();
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      elapsed++;
+      const pct = Math.round((elapsed / durationSeconds) * 100);
+      adBar.style.width = pct + '%';
+      if (elapsed >= durationSeconds) { clearInterval(interval); modalRoot.style.display = 'none'; resolve(true); }
+    }, 1000);
 
-    // tick: runs each second
-    setInterval(()=>{
-      const now = Date.now();
-      const dt = Math.floor((now - state.lastTick)/1000);
-      if(dt<=0){state.lastTick = now; return}
-      // handle farming produce
-      if(state.farming && state.farmEnd > Date.now()){
-        const produce = state.rate * dt;
-        state.stones += produce;
-        // visual sparkles
-        for(let i=0;i<Math.min(3,Math.ceil(produce));i++){
-          spawnSpark(40 + Math.random()*50, 20 + Math.random()*50);
-        }
-      } else if(state.farming && state.farmEnd <= Date.now()){
-        state.farming=false;
-        showToast('Phiên nuôi rồng hoàn thành!');
-      }
-      state.lastTick = now;
-      updateUI();
-      save();
-    },1000);
+    skipBtn.onclick = () => { clearInterval(interval); modalRoot.style.display = 'none'; resolve(false); showToast('Bạn đã bỏ qua quảng cáo.'); };
+    closeBtn.onclick = () => { clearInterval(interval); modalRoot.style.display = 'none'; resolve(true); };
+  });
+}
 
-    // Physics: apply offline bonus when page is open again
-    window.addEventListener('focus', ()=>{
-      const now = Date.now();
-      const last = state.lastTick || now;
-      const down = Math.floor((now - last)/1000);
-      if(down > 10 && !state.farming){
-        const offline = Math.min(3600, Math.floor(down/2) * state.rate); // simple offline cap
-        state.stones += offline;
-        state.offlineBonus += offline;
-        showToast(`Bạn nhận ${Math.round(offline)} linh thạch khi offline`);
-        updateUI(); save();
-      }
-      state.lastTick = now;
+// Start button
+startBtn.addEventListener('click', async () => {
+  // show ad (rewarded). After finished, start auto-farm for a duration based on level
+  const ok = await showAdFlow(6 + Math.floor(state.level / 2));
+  if (!ok) { return; }
+  // start farming session
+  const duration = 30 + state.level * 10; // seconds
+  state.farmDuration = duration;
+  state.farmEnd = Date.now() + duration * 1000;
+  state.farming = true;
+  state.lastTick = Date.now();
+  // initial spark + visual
+  for (let i = 0; i < 8; i++) { setTimeout(() => spawnSpark(45 + Math.random() * 40, 20 + Math.random() * 40), i * 120); }
+  showToast('Rồng bắt đầu tạo linh thạch!');
+  updateUI(); save();
+});
+
+// Upgrade
+upgradeBtn.addEventListener('click', () => {
+  if (state.stones >= state.cost) {
+    state.stones -= state.cost;
+    state.level += 1;
+    // speed growth ~1.22x
+    state.rate = Math.round((state.rate * 1.22 + 0.01) * 100) / 100;
+    state.cost = Math.round(state.cost * 1.45);
+    showToast('Nâng cấp thành công!');
+    // nice burst
+    for (let i = 0; i < 12; i++) { setTimeout(() => spawnSpark(30 + Math.random() * 60, 10 + Math.random() * 60), i * 80); }
+    updateUI(); save();
+  } else {
+    showToast('Không đủ linh thạch');
+  }
+});
+
+// Handle menu and leaderboard button
+document.getElementById('leaderBtn').onclick = async () => {
+  // Gửi yêu cầu đến API để lấy bảng xếp hạng
+  try {
+    const response = await fetch('http://localhost:3000/leaderboard');  // Đảm bảo URL trỏ tới API đúng
+    const leaderboard = await response.json();
+
+    // Tạo nội dung bảng xếp hạng
+    let leaderboardContent = '<div style="font-weight:700">Bảng Xếp Hạng</div>';
+    leaderboard.forEach((player, index) => {
+      leaderboardContent += `
+        <div style="margin-top:8px">#${index + 1} - ${player.username}: ${player.gems} linh thạch</div>
+      `;
     });
 
-    // fake rewarded ad flow
-    function showAdFlow(durationSeconds=8){
-      return new Promise((resolve)=>{
-        modalRoot.style.display='block';
-        modalRoot.innerHTML = `
-          <div class='modal-backdrop'>
-            <div class='modal'>
-              <div style='font-weight:700;font-size:16px'>Quảng cáo thưởng</div>
-              <div style='margin-top:8px;font-size:13px'>Xem quảng cáo để bắt đầu phiên nuôi rồng tự động (${durationSeconds}s)</div>
-              <div class='adbar'><i id='adBar' style='width:0%'></i></div>
-              <div style='display:flex;gap:10px;margin-top:12px'>
-                <button id='skipAd' class='btn secondary' style='flex:1'>Bỏ qua</button>
-                <button id='closeAd' class='btn' style='flex:1'>Ẩn</button>
-              </div>
-            </div>
-          </div>`;
+    // Thêm nút đóng vào modal
+    leaderboardContent += `
+      <div style="margin-top:12px; display: flex; justify-content: center;">
+        <button id="closeLeaderboard" class="btn secondary" style="flex:1">Đóng</button>
+      </div>
+    `;
 
-        const adBar = document.getElementById('adBar');
-        const skipBtn = document.getElementById('skipAd');
-        const closeBtn = document.getElementById('closeAd');
+    // Hiển thị bảng xếp hạng trong modal
+    showModal(leaderboardContent);
 
-        let elapsed = 0;
-        const interval = setInterval(()=>{
-          elapsed++;
-          const pct = Math.round((elapsed/durationSeconds)*100);
-          adBar.style.width = pct + '%';
-          if(elapsed >= durationSeconds){ clearInterval(interval); modalRoot.style.display='none'; resolve(true); }
-        },1000);
+    // Thêm sự kiện click cho nút "Đóng"
+    document.getElementById('closeLeaderboard').onclick = closeModal;
 
-        skipBtn.onclick = ()=>{ clearInterval(interval); modalRoot.style.display='none'; resolve(false); showToast('Bạn đã bỏ qua quảng cáo.'); };
-        closeBtn.onclick = ()=>{ /* emulate watching */ clearInterval(interval); modalRoot.style.display='none'; resolve(true); };
-      });
-    }
+  } catch (error) {
+    console.error('Lỗi khi lấy bảng xếp hạng:', error);
+    showToast('Không thể tải bảng xếp hạng!');
+  }
+};
 
-    // Start button
-    startBtn.addEventListener('click', async ()=>{
-      // show ad (rewarded). After finished, start auto-farm for a duration based on level
-      const ok = await showAdFlow(6 + Math.floor(state.level/2));
-      if(!ok){ return; }
-      // start farming session
-      const duration = 30 + state.level * 10; // seconds
-      state.farmDuration = duration;
-      state.farmEnd = Date.now() + duration*1000;
-      state.farming = true;
-      state.lastTick = Date.now();
-      // initial spark + visual
-      for(let i=0;i<8;i++){ setTimeout(()=>spawnSpark(45 + Math.random()*40, 20 + Math.random()*40), i*120); }
-      showToast('Rồng bắt đầu tạo linh thạch!');
-      updateUI(); save();
-    });
+// Modal helper
+function showModal(inner) {
+  modalRoot.style.display = 'block';
+  modalRoot.innerHTML = `<div class='modal-backdrop'>
+                           <div class='modal'>
+                             ${inner}
+                           </div>
+                         </div>`; // hiển thị modal
+}
 
-    // Upgrade
-    upgradeBtn.addEventListener('click', ()=>{
-      if(state.stones >= state.cost){
-        state.stones -= state.cost;
-        state.level += 1;
-        // speed growth ~1.22x
-        state.rate = Math.round((state.rate * 1.22 + 0.01) * 100)/100;
-        state.cost = Math.round(state.cost * 1.45);
-        showToast('Nâng cấp thành công!');
-        // nice burst
-        for(let i=0;i<12;i++){ setTimeout(()=>spawnSpark(30 + Math.random()*60, 10 + Math.random()*60), i*80); }
-        updateUI(); save();
-      } else {
-        showToast('Không đủ linh thạch');
-      }
-    });
+function closeModal() {
+  modalRoot.style.display = 'none';
+  modalRoot.innerHTML = '';
+}
 
-    // simple menu handlers
-    document.getElementById('tasksBtn').onclick = ()=>{ 
-      showModal(`\n        <div style='font-weight:700'>Nhiệm vụ</div>\n        <div style='margin-top:8px'>- Tạo 500 linh thạch → thưởng 50<br>- Xem 3 quảng cáo → thưởng 200<br>- Nâng cấp 5 lần → thưởng 300</div>\n        <div style='margin-top:12px;display:flex;gap:8px'><button id='close' class='btn' style='flex:1'>Đóng</button></div>`);
-    };
-    document.getElementById('buffBtn').onclick = ()=>{ 
-      showModal(`\n        <div style='font-weight:700'>Buff</div>\n        <div style='margin-top:8px'>Một số buff ngắn hạn: x2 tốc độ (30s), x5 tốc độ (10s).<br>Bạn có thể mua bằng linh thạch hoặc nhận thử qua quảng cáo.</div>\n        <div style='margin-top:12px;display:flex;gap:8px'>\n          <button id='watchBuff' class='btn secondary' style='flex:1'>Xem QC để thử</button>\n          <button id='buyBuff' class='btn' style='flex:1'>Mua (200)</button>\n        </div>`);
-      // delegate events
-      setTimeout(()=>{
-        const wb = document.getElementById('watchBuff');
-        const bb = document.getElementById('buyBuff');
-        if(wb) wb.onclick = async ()=>{ closeModal(); const ok = await showAdFlow(5); if(ok){ applyBuff(2,30); showToast('Buff x2 (30s) kích hoạt'); } };
-        if(bb) bb.onclick = ()=>{ if(state.stones>=200){ state.stones-=200; applyBuff(5,10); showToast('Buff x5 (10s) kích hoạt'); save(); updateUI(); closeModal(); } else showToast('Không đủ linh thạch'); };
-      },50);
-    };
-    document.getElementById('inviteBtn').onclick = ()=>{ showToast('Chức năng mời bạn bè chưa kết nối (demo)'); };
-    document.getElementById('storeBtn').onclick = ()=>{ showModal(`<div style='font-weight:700'>Quy đổi</div><div style='margin-top:8px'>Đổi linh thạch lấy quà (demo)</div><div style='display:flex;gap:8px;margin-top:12px'><button id='c1' class='btn' style='flex:1'>Đổi 100 → 10 gem</button><button id='c2' class='btn secondary' style='flex:1'>Đóng</button></div>`); setTimeout(()=>{ document.getElementById('c1').onclick = ()=>{ if(state.stones>=100){ state.stones-=100; showToast('Đổi thành công!'); save(); updateUI(); closeModal(); } else showToast('Không đủ linh thạch'); }; document.getElementById('c2').onclick = closeModal; },50); };
 
-    // modal helper
-    function showModal(inner){ modalRoot.style.display='block'; modalRoot.innerHTML = `<div class='modal-backdrop'><div class='modal'>${inner}</div></div>`; // attach basic close
-      const close = document.querySelector('.modal #close'); if(close) close.onclick = closeModal; }
-    function closeModal(){ modalRoot.style.display='none'; modalRoot.innerHTML=''; }
+// Modal helper
+function showModal(inner) {
+  modalRoot.style.display = 'block';
+  modalRoot.innerHTML = `<div class='modal-backdrop'><div class='modal'>${inner}</div></div>`; // hiển thị modal
+  const close = document.querySelector('.modal #close');
+  if (close) close.onclick = closeModal;
+}
 
-    // buffs: multiplier for rate
-    let activeBuff = {mul:1, end:0};
-    function applyBuff(mul,sec){ activeBuff.mul = mul; activeBuff.end = Date.now() + sec*1000; state.rate = Math.round((state.rate * mul) * 100)/100; setTimeout(()=>{ // revert after sec
-        // naive revert: divide by mul (acceptable for demo)
-        state.rate = Math.round((state.rate / mul) * 100)/100;
-        activeBuff = {mul:1,end:0};
-        showToast('Buff kết thúc'); save(); updateUI();
-      }, sec*1000);
-      save(); updateUI();
-    }
+function closeModal() {
+  modalRoot.style.display = 'none';
+  modalRoot.innerHTML = '';
+}
 
-    // initial flourish on load
-    for(let i=0;i<12;i++){ setTimeout(()=>spawnSpark(40 + Math.random()*40, 30 + Math.random()*40), i*100); }
+// initial flourish on load
+for (let i = 0; i < 12; i++) { setTimeout(() => spawnSpark(40 + Math.random() * 40, 30 + Math.random() * 40), i * 100); }
 
-    // expose for debug
-    window.__STATE = state;
+// expose for debug
+window.__STATE = state;
+
 
   </script>
 </body>
