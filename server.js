@@ -6,9 +6,6 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// ======================
-//  MongoDB Connect
-// ======================
 const MONGO_URL =
   "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";
 
@@ -17,9 +14,6 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB error:", err));
 
-// ======================
-//  Schema
-// ======================
 const PlayerSchema = new mongoose.Schema(
   {
     userId: { type: String, unique: true },
@@ -32,15 +26,12 @@ const PlayerSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const Player = mongoose.model("Player", PlayerSchema);
+// FIX QUAN TRỌNG: dùng collection "player"
+const Player = mongoose.model("Player", PlayerSchema, "player");
 
-// ======================
-//  GET PLAYER
-// ======================
 app.get("/player/:id", async (req, res) => {
   try {
     const userId = req.params.id;
-
     let player = await Player.findOne({ userId });
 
     if (!player) {
@@ -57,9 +48,6 @@ app.get("/player/:id", async (req, res) => {
   }
 });
 
-// ======================
-//  SYNC DATA
-// ======================
 app.post("/sync", async (req, res) => {
   try {
     const { userId, username, firstName, lastName, gems, level } = req.body;
@@ -70,7 +58,6 @@ app.post("/sync", async (req, res) => {
     let player = await Player.findOne({ userId });
 
     if (!player) {
-      // tạo mới
       player = new Player({
         userId,
         username,
@@ -82,7 +69,6 @@ app.post("/sync", async (req, res) => {
 
       await player.save();
     } else {
-      // cập nhật
       if (gems > player.gems) player.gems = gems;
       if (level > player.level) player.level = level;
 
@@ -104,9 +90,6 @@ app.post("/sync", async (req, res) => {
   }
 });
 
-// ======================
-//  Leaderboard
-// ======================
 app.get("/leaderboard", async (req, res) => {
   try {
     const list = await Player.find().sort({ gems: -1 }).limit(50);
@@ -126,8 +109,5 @@ app.get("/leaderboard", async (req, res) => {
   }
 });
 
-// ======================
-//  START SERVER
-// ======================
 const PORT = 3000;
 app.listen(PORT, () => console.log(`Server running at port ${PORT}`));
