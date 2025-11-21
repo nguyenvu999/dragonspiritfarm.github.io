@@ -1,18 +1,19 @@
 {
-  "name": "dragon-spirit-farm",
+  "name": "dragon-miniapp-server",
   "version": "1.0.0",
-  "main": "bot.js",
+  "main": "server.js",
+  "license": "MIT",
+  "type": "commonjs",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
+    "express": "^4.19.2",
+    "mongoose": "^8.1.1",
     "cors": "^2.8.5",
-    "express": "^5.1.0",
-    "mongoose": "^8.20.0",
-    "telegraf": "^4.16.3"
+    "helmet": "^7.0.0",
+    "body-parser": "^1.20.2",
+    "express-rate-limit": "^6.8.0",
+    "telegraf": "^4.16.2"
   }
 }
