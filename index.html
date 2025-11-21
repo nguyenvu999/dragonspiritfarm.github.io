@@ -158,25 +158,27 @@
     } catch(e){ console.warn(e) }
 
     // ensure userId
-    if (!state.userId) {
-      // If inside Telegram WebApp you can pick user id there; otherwise create random id.
-      try{
-        if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-          const u = Telegram.WebApp.initDataUnsafe.user;
-          state.userId = 'tg_' + u.id;
-          state.username = u.username || (u.first_name || 'Player');
-          state.firstName = u.first_name;
-          state.lastName = u.last_name;
-        } else {
-          state.userId = 'uid_' + Math.random().toString(36).slice(2,10);
-          state.username = 'Player_' + state.userId.slice(4,8);
-        }
-      } catch(e){
-        state.userId = 'uid_' + Math.random().toString(36).slice(2,10);
-        state.username = 'Player_' + state.userId.slice(4,8);
-      }
-      save();
-    }
+   if (
+  !window.Telegram ||
+  !Telegram.WebApp ||
+  !Telegram.WebApp.initDataUnsafe ||
+  !Telegram.WebApp.initDataUnsafe.user
+) {
+  alert("❌ Bạn cần mở trò chơi trong Telegram Mini App.\nKhông thể tạo user ngoài Telegram.");
+  throw new Error("Telegram WebApp not found");
+}
+
+// Dữ liệu Telegram
+const u = Telegram.WebApp.initDataUnsafe.user;
+
+// UserId cố định vĩnh viễn
+state.userId = "tg_" + u.id;
+state.username = u.username || u.first_name || "Player";
+state.firstName = u.first_name;
+state.lastName = u.last_name;
+
+save();
+
 
     // DOM refs
     const lvl = document.getElementById('levelTxt');
