@@ -3,7 +3,7 @@
 // ==============================
 const BOT_TOKEN = "8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E";     // Telegram bot token
 const MONGO_URL = "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";     // MongoDB Atlas URL
-const WEBAPP_URL = "https://nguyenvu999.github.io/dragonspiritfarm.github.io/";    // WebApp URL (Mini App)
+const WEBAPP_URL = "https://dragonspiritfarm.vercel.app/";    // WebApp URL (Mini App)
 
 // ==============================
 //      IMPORT MODULES
@@ -91,30 +91,51 @@ function verifyInitData(initData, botToken) {
 // ==============================
 const bot = new Telegraf(BOT_TOKEN);
 
-// START command — KHÔNG LƯU USER
+// START command — TRUYỀN UID + UNAME
 bot.start((ctx) => {
+  const uid = ctx.from.id;
+  const uname = ctx.from.username || ctx.from.first_name || "";
+
   ctx.reply(
     `Chào ${ctx.from.first_name}!\nNhấn /play để mở game.`,
     {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "Mở Mini App", web_app: { url: WEBAPP_URL } }],
+          [
+            {
+              text: "Mở Mini App",
+              web_app: {
+                url: WEBAPP_URL + `?uid=${uid}&uname=${uname}`
+              }
+            }
+          ]
         ],
       },
     }
   );
 });
 
-// /play
+// /play — TRUYỀN UID + UNAME
 bot.command("play", (ctx) => {
+  const uid = ctx.from.id;
+  const uname = ctx.from.username || ctx.from.first_name || "";
+
   ctx.reply("Nhấn nút bên dưới để mở Mini App:", {
     reply_markup: {
       inline_keyboard: [
-        [{ text: "Mở Mini App", web_app: { url: WEBAPP_URL } }],
+        [
+          {
+            text: "Mở Mini App",
+            web_app: {
+              url: WEBAPP_URL + `?uid=${uid}&uname=${uname}`
+            }
+          }
+        ]
       ],
     },
   });
 });
+
 
 // Leaderboard command
 bot.command("leaderboard", async (ctx) => {
@@ -193,6 +214,3 @@ app.get("/leaderboard", async (req, res) => {
 // ==============================
 const PORT = 3000;
 app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`));
-
-
-
