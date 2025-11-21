@@ -416,84 +416,96 @@
 
     for(let i=0;i<12;i++){ setTimeout(()=>spawnSpark(40 + Math.random()*40, 30 + Math.random()*40), i*100); }
 
-    // ---------- SYNC LOGIC ----------
-    let syncTimer = null;
-    let lastSyncAt = 0;
+    // ---------- SYNC LOGIC (improved with atomic collect) ----------
+let syncTimer = null;
+let collectTimer = null;
+let lastSyncAt = 0;
 
-    function scheduleSync() {
-      // Debounce: wait 1.5s after last change
-      if (syncTimer) clearTimeout(syncTimer);
-      syncTimer = setTimeout(()=>{ syncToServer(); }, 1500);
+// pending amount to send via /collect
+let pendingCollect = 0;
+
+// Call this when you "produce" gems (e.g., in tick when adding gems)
+// Instead of immediately calling syncToServer, accumulate into pendingCollect and scheduleCollect().
+function markCollected(amount) {
+  pendingCollect += Math.max(0, Math.floor(amount));
+  // schedule immediate small-batched send
+  if (collectTimer) clearTimeout(collectTimer);
+  collectTimer = setTimeout(() => { sendCollect(); }, 700); // 700ms debounce
+}
+
+async function sendCollect() {
+  if (pendingCollect <= 0) return;
+  const amount = pendingCollect;
+  pendingCollect = 0;
+  if (collectTimer) { clearTimeout(collectTimer); collectTimer = null; }
+
+  try {
+    const res = await fetch(`${API_BASE}/collect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: state.userId, amount })
+    });
+    const json = await res.json();
+    if (json && json.success) {
+      // update client to server-authoritative value
+      state.gems = Number(json.gems) || state.gems;
+      save(); updateUI();
+      // small toast (optional)
+      // showToast(`+${amount} đã lưu`, 900);
+    } else {
+      console.warn('Collect failed', json);
+      // If failed, re-add to pendingCollect for retry
+      pendingCollect += amount;
+      // schedule retry
+      if (!collectTimer) collectTimer = setTimeout(sendCollect, 2000);
     }
+  } catch (e) {
+    console.warn('Collect network error', e);
+    pendingCollect += amount;
+    if (!collectTimer) collectTimer = setTimeout(sendCollect, 2000);
+  }
+}
 
-    async function syncToServer() {
-      syncTimer = null;
-      // Avoid syncing too frequently (safety)
-      const now = Date.now();
-      if (now - lastSyncAt < 800) return;
-      lastSyncAt = now;
+// Legacy scheduleSync (keeps /sync for full state updates)
+function scheduleSync() {
+  if (syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(()=>{ syncToServer(); }, 1500);
+}
 
-      try {
-        const payload = {
-          userId: state.userId,
-          username: state.username,
-          firstName: state.firstName,
-          lastName: state.lastName,
-          gems: Math.floor(state.gems),
-          level: state.level
-        };
+async function syncToServer() {
+  syncTimer = null;
+  const now = Date.now();
+  if (now - lastSyncAt < 800) return;
+  lastSyncAt = now;
+  try {
+    const payload = {
+      userId: state.userId,
+      username: state.username,
+      firstName: state.firstName,
+      lastName: state.lastName,
+      gems: Math.floor(state.gems),
+      level: state.level
+    };
 
-        const res = await fetch(`${API_BASE}/sync`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+    const res = await fetch(`${API_BASE}/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
-        const json = await res.json();
-        if (json && json.success) {
-          // server authoritative gems
-          state.gems = Number(json.gems) || state.gems;
-          save(); updateUI();
-          showToast('Đã đồng bộ với server', 1200);
-        } else {
-          console.warn('Sync failed', json);
-        }
-      } catch (e) {
-        console.warn('Sync error', e);
-        // offline: no network -> will retry next schedule
-      }
+    const json = await res.json();
+    if (json && json.success) {
+      // server authoritative gems (sync might increase)
+      state.gems = Number(json.gems) || state.gems;
+      save(); updateUI();
+      // optional toast: showToast('Đã đồng bộ với server', 1200);
+    } else {
+      console.warn('Sync failed', json);
     }
-
-    // Load server data on start
-    async function loadServerData() {
-      try {
-        const res = await fetch(`${API_BASE}/player/${encodeURIComponent(state.userId)}`);
-        if (!res.ok) return;
-        const json = await res.json();
-        if (json && json.success && json.player) {
-          const server = json.player;
-          // If server has more gems -> update client
-          if (server.gems > state.gems) {
-            state.gems = server.gems;
-            showToast('Đã đồng bộ dữ liệu từ server');
-          }
-          // update other fields
-          state.username = server.username || state.username;
-          state.level = server.level || state.level;
-          save(); updateUI();
-        }
-      } catch (e) {
-        console.warn('Load server data failed', e);
-      }
-    }
-
-    // Try initial load, and periodic refresh (e.g., every 60s)
-    loadServerData();
-    setInterval(()=>{ loadServerData(); }, 60_000);
-
-    // expose state for debugging
-    window.__STATE = state;
-    // -----------------------------------
+  } catch (e) {
+    console.warn('Sync error', e);
+  }
+}
 
   </script>
 </body>

@@ -1,12 +1,17 @@
-import express from "express";
-import mongoose from "mongoose";
-import cors from "cors";
+// server.js (fixed) - supports atomic collect endpoint
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 
+// =====================
+//  CONNECT DATABASE
+// =====================
 const MONGO_URL =
+  process.env.MONGO_URL ||
   "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";
 
 mongoose
@@ -14,6 +19,9 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("MongoDB error:", err));
 
+// =====================
+//  SCHEMA
+// =====================
 const PlayerSchema = new mongoose.Schema(
   {
     userId: { type: String, unique: true },
@@ -22,92 +30,141 @@ const PlayerSchema = new mongoose.Schema(
     lastName: String,
     gems: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
+    lastSync: { type: Date, default: Date.now },
   },
   { timestamps: true }
 );
 
-// FIX QUAN TRỌNG: dùng collection "player"
 const Player = mongoose.model("Player", PlayerSchema, "player");
 
+// =====================
+//  GET PLAYER
+// =====================
 app.get("/player/:id", async (req, res) => {
   try {
-    const userId = req.params.id;
-    let player = await Player.findOne({ userId });
+    const userId = String(req.params.id);
+    const player = await Player.findOne({ userId }).lean();
 
     if (!player) {
       return res.json({ success: false, message: "not found" });
     }
 
-    return res.json({
-      success: true,
-      player,
-    });
-  } catch (e) {
-    console.error(e);
-    res.json({ success: false });
+    return res.json({ success: true, player });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// =====================
+//  SYNC DATA (client -> server)
+//  Use for initial save / full-state sync
+// =====================
 app.post("/sync", async (req, res) => {
   try {
     const { userId, username, firstName, lastName, gems, level } = req.body;
 
-    if (!userId)
-      return res.json({ success: false, message: "Missing userId" });
+    if (!userId) return res.status(400).json({ success: false, message: "missing userId" });
 
     let player = await Player.findOne({ userId });
 
+    // Create if not exists
     if (!player) {
-      player = new Player({
+      player = await Player.create({
         userId,
-        username,
+        username: username || "Player",
         firstName,
         lastName,
-        gems: gems || 0,
-        level: level || 1,
+        gems: Number(gems) || 0,
+        level: Number(level) || 1,
       });
 
-      await player.save();
-    } else {
-      if (gems > player.gems) player.gems = gems;
-      if (level > player.level) player.level = level;
-
-      if (username) player.username = username;
-      if (firstName) player.firstName = firstName;
-      if (lastName) player.lastName = lastName;
-
-      await player.save();
+      return res.json({
+        success: true,
+        created: true,
+        gems: player.gems,
+        level: player.level,
+      });
     }
 
-    return res.json({
-      success: true,
-      gems: player.gems,
-      level: player.level,
-    });
-  } catch (e) {
-    console.error(e);
-    res.json({ success: false });
+    // Update user info fields (non-destructive)
+    if (username) player.username = username;
+    if (firstName) player.firstName = firstName;
+    if (lastName) player.lastName = lastName;
+
+    // Keep server authoritative for absolute values:
+    // If client sends larger gems we accept it (still use max to avoid accidental overwrite by old client)
+    if (typeof gems === "number") {
+      player.gems = Math.max(player.gems, gems);
+    }
+    if (typeof level === "number") {
+      player.level = Math.max(player.level, level);
+    }
+
+    player.lastSync = new Date();
+    await player.save();
+
+    return res.json({ success: true, gems: player.gems, level: player.level });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
+// =====================
+//  COLLECT endpoint (atomic increment)
+//  Client should call this with { userId, amount }
+//  Server will increment gems atomically and return the new value.
+//  This is the recommended way when "picking up" produced gems.
+// =====================
+app.post("/collect", async (req, res) => {
+  try {
+    const { userId, amount } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: "missing userId" });
+    const delta = Number(amount || 0);
+    if (!Number.isFinite(delta) || delta <= 0) {
+      return res.status(400).json({ success: false, message: "invalid amount" });
+    }
+
+    // Atomic increment and return the updated document
+    const updated = await Player.findOneAndUpdate(
+      { userId },
+      { $inc: { gems: delta }, $set: { lastSync: new Date() } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    // If upsert created doc, ensure fields exist
+    const gemsNow = updated.gems || 0;
+    return res.json({ success: true, gems: gemsNow });
+  } catch (error) {
+    console.error("/collect error:", error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// =====================
+//  LEADERBOARD
+// =====================
 app.get("/leaderboard", async (req, res) => {
   try {
-    const list = await Player.find().sort({ gems: -1 }).limit(50);
+    const top = await Player.find()
+      .sort({ gems: -1 })
+      .limit(50)
+      .select("userId username gems level -_id")
+      .lean();
 
     return res.json({
       success: true,
-      leaderboard: list.map((p) => ({
-        userId: p.userId,
-        username: p.username || "Player",
-        gems: p.gems,
-        level: p.level,
-      })),
+      leaderboard: top,
     });
-  } catch (e) {
-    console.error(e);
-    res.json({ success: false });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 });
 
-const PORT = 3000;
-app.listen(PORT, () => console.log(`Server running at port ${PORT}`));
+// =====================
+//  START SERVER
+// =====================
+const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
+app.listen(PORT, () => console.log("Server chạy port", PORT));

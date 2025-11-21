@@ -2,7 +2,7 @@ const { Telegraf } = require('telegraf');
 const mongoose = require('mongoose');
 
 // Khởi tạo bot với token
-const bot = new Telegraf('8347563664:AAGHVOfLRid7CQHDC0HHcvpFZZvhfxenpCQ');  // Thay 'YOUR_BOT_TOKEN' bằng token bot của bạn
+const bot = new Telegraf('8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E');  // Thay 'YOUR_BOT_TOKEN' bằng token bot của bạn
 
 // Kết nối MongoDB Atlas
 mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
@@ -56,7 +56,7 @@ bot.command('play', (ctx) => {
   ctx.reply('Chào mừng bạn đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.', {
     reply_markup: {
       inline_keyboard: [
-        [{ text: 'Mở Mini App', web_app: { url: 'https://stellular-frangollo-9bfc86.netlify.app/' } }],
+        [{ text: 'Mở Mini App', web_app: { url: 'https://nguyenvu999.github.io/dragonspiritfarm.github.io/' } }],
       ]
     }
   });
