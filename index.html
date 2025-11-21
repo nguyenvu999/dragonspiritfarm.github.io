@@ -157,25 +157,17 @@
       if (raw) Object.assign(state, JSON.parse(raw));
     } catch(e){ console.warn(e) }
 
-    // ensure userId
-   if (!state.userId) {
-  try{
-    if (window.Telegram && Telegram.WebApp && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
-      const u = Telegram.WebApp.initDataUnsafe.user;
-      state.userId = 'tg_' + u.id;
-      state.username = u.username || (u.first_name || 'Player');
-      state.firstName = u.first_name;
-      state.lastName = u.last_name;
-    } else {
-      state.userId = 'uid_' + Math.random().toString(36).slice(2,10);
-      state.username = 'Player_' + state.userId.slice(4,8);
-    }
-  } catch(e){
-    state.userId = 'uid_' + Math.random().toString(36).slice(2,10);
-    state.username = 'Player_' + state.userId.slice(4,8);
-  }
-  save();
+ if (window.Telegram && Telegram.WebApp.initDataUnsafe && Telegram.WebApp.initDataUnsafe.user) {
+  const u = Telegram.WebApp.initDataUnsafe.user;
+  state.userId = 'tg_' + u.id;
+  state.username = u.username || (u.first_name || "Player");
+  state.firstName = u.first_name || null;
+  state.lastName = u.last_name || null;
+} else {
+  alert("Game này chỉ hoạt động bên trong Telegram Mini App.");
+  throw new Error("No Telegram User Found");
 }
+
 
 
     // DOM refs

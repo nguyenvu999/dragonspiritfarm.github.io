@@ -1,170 +1,195 @@
-// server.js (fixed) - supports atomic collect endpoint
+// ==============================
+//      CONFIG (KHÔNG DÙNG .env)
+// ==============================
+const BOT_TOKEN = "8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E";     // Telegram bot token
+const MONGO_URL = "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";     // MongoDB Atlas URL
+const WEBAPP_URL = "https://nguyenvu999.github.io/dragonspiritfarm.github.io/";    // WebApp URL (Mini App)
+
+// ==============================
+//      IMPORT MODULES
+// ==============================
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const bodyParser = require("body-parser");
+const crypto = require("crypto");
+const { Telegraf } = require("telegraf");
 
+// ==============================
+//      INIT EXPRESS APP
+// ==============================
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(helmet());
+app.use(bodyParser.json());
 
-// =====================
-//  CONNECT DATABASE
-// =====================
-const MONGO_URL =
-  process.env.MONGO_URL ||
-  "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";
-
-mongoose
-  .connect(MONGO_URL)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error("MongoDB error:", err));
-
-// =====================
-//  SCHEMA
-// =====================
-const PlayerSchema = new mongoose.Schema(
-  {
-    userId: { type: String, unique: true },
-    username: String,
-    firstName: String,
-    lastName: String,
-    gems: { type: Number, default: 0 },
-    level: { type: Number, default: 1 },
-    lastSync: { type: Date, default: Date.now },
-  },
-  { timestamps: true }
+// Apply rate limiting to all API routes
+app.use(
+  rateLimit({
+    windowMs: 10 * 1000,
+    max: 20,
+  })
 );
 
-const Player = mongoose.model("Player", PlayerSchema, "player");
+// ==============================
+//      DATABASE CONNECT
+// ==============================
+mongoose
+  .connect(MONGO_URL)
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.error("DB ERROR:", err));
 
-// =====================
-//  GET PLAYER
-// =====================
-app.get("/player/:id", async (req, res) => {
-  try {
-    const userId = String(req.params.id);
-    const player = await Player.findOne({ userId }).lean();
+// ==============================
+//      DATABASE MODEL
+// ==============================
+const PlayerSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  username: String,
+  firstName: String,
+  lastName: String,
 
-    if (!player) {
-      return res.json({ success: false, message: "not found" });
-    }
-
-    return res.json({ success: true, player });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
+  gems: { type: Number, default: 0 },
+  level: { type: Number, default: 1 },
 });
 
-// =====================
-//  SYNC DATA (client -> server)
-//  Use for initial save / full-state sync
-// =====================
+const Player = mongoose.model("Player", PlayerSchema);
+
+// ==============================
+//      VERIFY TELEGRAM initData
+// ==============================
+function verifyInitData(initData, botToken) {
+  if (!initData) return null;
+
+  const encoded = decodeURIComponent(initData);
+  const params = new URLSearchParams(encoded);
+
+  const hash = params.get("hash");
+  params.delete("hash");
+
+  const dataCheckString = [...params.entries()]
+    .map(([key, val]) => `${key}=${val}`)
+    .sort()
+    .join("\n");
+
+  const secretKey = crypto
+    .createHmac("sha256", "WebAppData")
+    .update(botToken)
+    .digest();
+
+  const calculated = crypto
+    .createHmac("sha256", secretKey)
+    .update(dataCheckString)
+    .digest("hex");
+
+  return calculated === hash ? Object.fromEntries(params.entries()) : null;
+}
+
+// ==============================
+//      TELEGRAM BOT
+// ==============================
+const bot = new Telegraf(BOT_TOKEN);
+
+// START command — KHÔNG LƯU USER
+bot.start((ctx) => {
+  ctx.reply(
+    `Chào ${ctx.from.first_name}!\nNhấn /play để mở game.`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "Mở Mini App", web_app: { url: WEBAPP_URL } }],
+        ],
+      },
+    }
+  );
+});
+
+// /play
+bot.command("play", (ctx) => {
+  ctx.reply("Nhấn nút bên dưới để mở Mini App:", {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: "Mở Mini App", web_app: { url: WEBAPP_URL } }],
+      ],
+    },
+  });
+});
+
+// Leaderboard command
+bot.command("leaderboard", async (ctx) => {
+  const list = await Player.find().sort({ gems: -1 }).limit(20);
+
+  let msg = "<b>🏆 BẢNG XẾP HẠNG</b>\n\n";
+  list.forEach((p, i) => {
+    msg += `${i + 1}. <b>${p.username || "NoName"}</b>: ${p.gems} 💎\n`;
+  });
+
+  ctx.reply(msg, { parse_mode: "HTML" });
+});
+
+bot.launch();
+console.log("BOT RUNNING...");
+
+// ==============================
+//      API — SYNC USER (KHÔNG TẠO USER)
+// ==============================
 app.post("/sync", async (req, res) => {
-  try {
-    const { userId, username, firstName, lastName, gems, level } = req.body;
+  const { initData } = req.body;
 
-    if (!userId) return res.status(400).json({ success: false, message: "missing userId" });
+  const auth = verifyInitData(initData, BOT_TOKEN);
+  if (!auth) return res.status(403).json({ ok: false, error: "INVALID_DATA" });
 
-    let player = await Player.findOne({ userId });
+  const userId = auth.user?.id;
+  const player = await Player.findOne({ userId });
 
-    // Create if not exists
-    if (!player) {
-      player = await Player.create({
-        userId,
-        username: username || "Player",
-        firstName,
-        lastName,
-        gems: Number(gems) || 0,
-        level: Number(level) || 1,
-      });
-
-      return res.json({
-        success: true,
-        created: true,
-        gems: player.gems,
-        level: player.level,
-      });
-    }
-
-    // Update user info fields (non-destructive)
-    if (username) player.username = username;
-    if (firstName) player.firstName = firstName;
-    if (lastName) player.lastName = lastName;
-
-    // Keep server authoritative for absolute values:
-    // If client sends larger gems we accept it (still use max to avoid accidental overwrite by old client)
-    if (typeof gems === "number") {
-      player.gems = Math.max(player.gems, gems);
-    }
-    if (typeof level === "number") {
-      player.level = Math.max(player.level, level);
-    }
-
-    player.lastSync = new Date();
-    await player.save();
-
-    return res.json({ success: true, gems: player.gems, level: player.level });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
+  res.json({
+    ok: true,
+    exists: !!player,
+    player: player || null,
+  });
 });
 
-// =====================
-//  COLLECT endpoint (atomic increment)
-//  Client should call this with { userId, amount }
-//  Server will increment gems atomically and return the new value.
-//  This is the recommended way when "picking up" produced gems.
-// =====================
+// ==============================
+//      API — COLLECT → TẠO USER TẠI ĐÂY
+// ==============================
 app.post("/collect", async (req, res) => {
-  try {
-    const { userId, amount } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: "missing userId" });
-    const delta = Number(amount || 0);
-    if (!Number.isFinite(delta) || delta <= 0) {
-      return res.status(400).json({ success: false, message: "invalid amount" });
-    }
+  const { initData, gems } = req.body;
 
-    // Atomic increment and return the updated document
-    const updated = await Player.findOneAndUpdate(
-      { userId },
-      { $inc: { gems: delta }, $set: { lastSync: new Date() } },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    ).lean();
+  const auth = verifyInitData(initData, BOT_TOKEN);
+  if (!auth) return res.status(403).json({ ok: false, error: "INVALID_DATA" });
 
-    // If upsert created doc, ensure fields exist
-    const gemsNow = updated.gems || 0;
-    return res.json({ success: true, gems: gemsNow });
-  } catch (error) {
-    console.error("/collect error:", error);
-    return res.status(500).json({ success: false, error: error.message });
-  }
-});
+  const tgUser = auth.user;
 
-// =====================
-//  LEADERBOARD
-// =====================
-app.get("/leaderboard", async (req, res) => {
-  try {
-    const top = await Player.find()
-      .sort({ gems: -1 })
-      .limit(50)
-      .select("userId username gems level -_id")
-      .lean();
+  let player = await Player.findOne({ userId: tgUser.id });
 
-    return res.json({
-      success: true,
-      leaderboard: top,
+  // CREATE IF NOT EXISTS — Only HERE!
+  if (!player) {
+    player = new Player({
+      userId: tgUser.id,
+      username: tgUser.username,
+      firstName: tgUser.first_name,
+      lastName: tgUser.last_name,
+      gems: 0,
     });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, error: error.message });
   }
+
+  player.gems += Number(gems || 0);
+  await player.save();
+
+  res.json({ ok: true, gems: player.gems });
 });
 
-// =====================
-//  START SERVER
-// =====================
-const PORT = process.env.PORT ? Number(process.env.PORT) : 3000;
-app.listen(PORT, () => console.log("Server chạy port", PORT));
+// ==============================
+//      API — LEADERBOARD
+// ==============================
+app.get("/leaderboard", async (req, res) => {
+  const top = await Player.find().sort({ gems: -1 }).limit(20);
+  res.json(top);
+});
+
+// ==============================
+//      RUN SERVER
+// ==============================
+const PORT = 3000;
+app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`));
