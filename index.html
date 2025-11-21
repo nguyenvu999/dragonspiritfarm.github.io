@@ -172,7 +172,8 @@
 const u = Telegram.WebApp.initDataUnsafe.user;
 
 // UserId cố định vĩnh viễn
-state.userId = "tg_" + u.id;
+state.userId = String(u.id);
+
 state.username = u.username || u.first_name || "Player";
 state.firstName = u.first_name;
 state.lastName = u.last_name;
