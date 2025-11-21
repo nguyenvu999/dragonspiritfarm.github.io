@@ -164,8 +164,8 @@
   !Telegram.WebApp.initDataUnsafe ||
   !Telegram.WebApp.initDataUnsafe.user
 ) {
-  alert("Bạn phải mở trong Telegram");
-  return;
+  alert("❌ Bạn cần mở trò chơi trong Telegram Mini App.\nKhông thể tạo user ngoài Telegram.");
+  throw new Error("Telegram WebApp not found");
 }
 
 // Dữ liệu Telegram
@@ -253,8 +253,6 @@ save();
       if (state.farming && state.farmEnd > Date.now()){
         const produce = state.rate * dt;
         state.gems += produce;
-        markCollected(produce);
-
         // small visual
         for(let i=0;i<Math.min(3,Math.ceil(produce));i++){
           spawnSpark(40 + Math.random()*50, 20 + Math.random()*50);
