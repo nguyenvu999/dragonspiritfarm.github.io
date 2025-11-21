@@ -3,7 +3,7 @@
 // ==============================
 const BOT_TOKEN = "8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E";     // Telegram bot token
 const MONGO_URL = "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";     // MongoDB Atlas URL
-const WEBAPP_URL = "https://dragonspiritfarm.vercel.app/";    // WebApp URL (Mini App)
+const WEBAPP_URL = "https://nguyenvu999.github.io/dragonspiritfarm.github.io/";    // WebApp URL (Mini App)
 
 // ==============================
 //      IMPORT MODULES
@@ -214,3 +214,4 @@ app.get("/leaderboard", async (req, res) => {
 // ==============================
 const PORT = 3000;
 app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`));
+
