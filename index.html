@@ -1,533 +1,558 @@
-  <!doctype html>
-  <html lang="vi">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Rồng Linh Thạch — Demo (sync)</title>
-    <style>
-      /* (giữ nguyên style của bạn) */
-      :root{
-        --bg1:#071b2f; --bg2:#0e3a2f; --panel: rgba(255,255,255,0.06);
-        --accent:#ffcc33; --accent-2:#7afcff; --glass: rgba(255,255,255,0.06);
-        --soft: rgba(255,255,255,0.04);
-        font-family: Inter, Roboto, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial;
-      }
-      html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#eaf6ff}
-      .app{max-width:420px;margin:20px auto;padding:18px;box-sizing:border-box}
-      .header{display:flex;align-items:center;gap:12px}
-      .avatar{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#ffb347,#ffcc33);display:flex;align-items:center;justify-content:center;color:#603800;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,0.35)}
-      h1{font-size:18px;margin:0}
-      .sub{opacity:0.9;font-size:12px}
-      .stage{margin-top:14px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
-      .dragon-wrap{display:flex;gap:12px;align-items:center}
-      .dragon-card{flex:1;display:flex;flex-direction:column;align-items:center;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));position:relative}
-      .dragon{width:180px;height:140px;display:block}
-      .dragon .breath{transform-origin:center;animation:breath 1.6s ease-in-out infinite}
-      @keyframes breath{0%{transform:translateY(6px)}50%{transform:translateY(0)}100%{transform:translateY(6px)}}
-      .sparkle-layer{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none}
-      .sparkle{position:absolute;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #fff, var(--accent-2));filter:blur(2px);opacity:0;transform:scale(0.6)}
-      .info{margin-top:8px;text-align:center}
-      .level{font-size:20px;font-weight:700;color:var(--accent)}
-      .cost{font-size:13px;color:#dfeffd}
-      .stats{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
-      .stat{background:var(--panel);padding:8px;border-radius:10px;flex:1;margin-right:8px;text-align:center}
-      .stat:last-child{margin-right:0}
-      .stat .v{font-weight:700;font-size:16px}
-      .controls{display:flex;gap:10px;margin-top:12px}
-      button.btn{flex:1;padding:10px;border-radius:10px;border:0;background:linear-gradient(180deg,var(--accent),#e6b21a);font-weight:700;color:#2b1700;cursor:pointer;box-shadow:0 8px 18px rgba(0,0,0,0.35)}
-      button.btn.secondary{background:linear-gradient(180deg,#2b6b6b,#1a4b4b);color:#dff8f7}
-      .menu{display:flex;gap:8px;margin-top:14px}
-      .menu .item{flex:1;background:var(--soft);padding:10px;border-radius:10px;text-align:center;font-size:13px}
-      .farm-banner{margin-top:12px;background:linear-gradient(90deg,#06223b55,#063a2f55);padding:8px;border-radius:10px;display:flex;align-items:center;gap:10px}
-      .progress{flex:1;height:12px;background:#063a2f;border-radius:999px;overflow:hidden}
-      .progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width 0.3s}
-      .modal-backdrop{position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}
-      .modal{width:92%;max-width:420px;background:linear-gradient(180deg,#0b2a2a,#04293a);border-radius:12px;padding:18px;color:#fff;box-shadow:0 30px 80px rgba(0,0,0,0.6)}
-      .adbar{height:10px;background:#063a2f;border-radius:10px;overflow:hidden;margin-top:12px}
-      .adbar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width 0.15s}
-      @media (min-width:560px){.app{transform:scale(1);}}
-      .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:#04293a;padding:10px 14px;border-radius:8px;color:#eaffff}
-    </style>
-  </head>
-  <body>
-    <div class="app" id="app">
-      <div class="header">
-        <div class="avatar">R</div>
-        <div>
-          <h1>Rồng Linh Thạch</h1>
-          <div class="sub">Nuôi rồng • Tạo linh thạch • Đồng bộ với server</div>
-        </div>
-      </div>
-
-      <div class="stage">
-        <div class="dragon-wrap">
-          <div class="dragon-card">
-            <svg class="dragon" viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="#7afcff"/><stop offset="1" stop-color="#7afcff" stop-opacity="0.6"/></linearGradient>
-              </defs>
-              <g class="breath">
-                <ellipse cx="100" cy="84" rx="64" ry="36" fill="#073a2a"/>
-                <path d="M40 70 q30 -40 80 -35 q40 3 60 35 q-12 18 -52 29 q-34 6 -86 -29z" fill="#10473b"/>
-                <circle cx="140" cy="55" r="8" fill="#ffdb6b"/>
-                <circle cx="90" cy="55" r="6" fill="#fff"/>
-                <circle cx="92" cy="56" r="2" fill="#000"/>
-                <path d="M60 35 q8 -12 18 -12 q6 0 12 8" stroke="#ffd57a" stroke-width="3" fill="none" stroke-linecap="round"/>
-              </g>
-              <g id="gem" transform="translate(100,30)">
-                <polygon points="0,-8 6,0 0,12 -6,0" fill="#ffcc33" opacity="0.0">
-                  <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite"/>
-                </polygon>
-              </g>
-            </svg>
-
-            <div class="sparkle-layer" id="sparkle-layer"></div>
-
-            <div class="info">
-              <div class="level" id="levelTxt">Lv. 1</div>
-              <div class="cost" id="costTxt">Chi phí nâng cấp tiếp theo: <strong id="costVal">100</strong> linh thạch</div>
-            </div>
-
-          </div>
-        </div>
-
-        <div class="stats">
-          <div class="stat">
-            <div class="v" id="gemsVal">0</div>
-            <div class="sub">Linh thạch</div>
-          </div>
-          <div class="stat">
-            <div class="v" id="rateVal">1 /s</div>
-            <div class="sub">Tốc độ</div>
-          </div>
-          <div class="stat">
-            <div class="v" id="offlineVal">0</div>
-            <div class="sub">Offline</div>
-          </div>
-        </div>
-
-        <div class="controls">
-          <button class="btn" id="startBtn">Bắt đầu nuôi rồng</button>
-          <button class="btn secondary" id="upgradeBtn">Nâng cấp (100)</button>
-        </div>
-
-        <div class="farm-banner" id="farmBanner" style="display:none">
-          <div style="font-size:13px">Đang sản xuất tự động</div>
-          <div class="progress"><i id="progressBar" style="width:0%"></i></div>
-          <div style="min-width:74px;text-align:center" id="durationText">00:00:00</div>
-        </div>
-
-        <div class="menu">
-          <div class="item" id="tasksBtn">🎯 Nhiệm Vụ</div>
-          <div class="item" id="buffBtn">✨ Buff</div>
-          <div class="item" id="inviteBtn">👥 Mời Bạn Bè</div>
-          <div class="item" id="storeBtn">🏪 Quy Đổi</div>
-          <div class="item" id="leaderBtn">🏆 Xếp Hạng</div>
-        </div>
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rồng Linh Thạch — Demo (sync)</title>
+  <style>
+    :root{
+      --bg1:#071b2f; --bg2:#0e3a2f; --panel: rgba(255,255,255,0.06);
+      --accent:#ffcc33; --accent-2:#7afcff; --glass: rgba(255,255,255,0.06);
+      --soft: rgba(255,255,255,0.04);
+      font-family: Inter, Roboto, system-ui, -apple-system, "Segoe UI", "Helvetica Neue", Arial;
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg1),var(--bg2));color:#eaf6ff}
+    .app{max-width:420px;margin:20px auto;padding:18px;box-sizing:border-box}
+    .header{display:flex;align-items:center;gap:12px}
+    .avatar{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,#ffb347,#ffcc33);display:flex;align-items:center;justify-content:center;color:#603800;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,0.35)}
+    h1{font-size:18px;margin:0}
+    .sub{opacity:0.9;font-size:12px}
+    .stage{margin-top:14px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:16px;box-shadow:inset 0 1px 0 rgba(255,255,255,0.02)}
+    .dragon-wrap{display:flex;gap:12px;align-items:center}
+    .dragon-card{flex:1;display:flex;flex-direction:column;align-items:center;padding:12px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));position:relative}
+    .dragon{width:180px;height:140px;display:block}
+    .dragon .breath{transform-origin:center;animation:breath 1.6s ease-in-out infinite}
+    @keyframes breath{0%{transform:translateY(6px)}50%{transform:translateY(0)}100%{transform:translateY(6px)}}
+    .sparkle-layer{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none}
+    .sparkle{position:absolute;width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 30% 30%, #fff, var(--accent-2));filter:blur(2px);opacity:0;transform:scale(0.6)}
+    .info{margin-top:8px;text-align:center}
+    .level{font-size:20px;font-weight:700;color:var(--accent)}
+    .cost{font-size:13px;color:#dfeffd}
+    .stats{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+    .stat{background:var(--panel);padding:8px;border-radius:10px;flex:1;margin-right:8px;text-align:center}
+    .stat:last-child{margin-right:0}
+    .stat .v{font-weight:700;font-size:16px}
+    .controls{display:flex;gap:10px;margin-top:12px}
+    button.btn{flex:1;padding:10px;border-radius:10px;border:0;background:linear-gradient(180deg,var(--accent),#e6b21a);font-weight:700;color:#2b1700;cursor:pointer;box-shadow:0 8px 18px rgba(0,0,0,0.35)}
+    button.btn.secondary{background:linear-gradient(180deg,#2b6b6b,#1a4b4b);color:#dff8f7}
+    .menu{display:flex;gap:8px;margin-top:14px}
+    .menu .item{flex:1;background:var(--soft);padding:10px;border-radius:10px;text-align:center;font-size:13px}
+    .farm-banner{margin-top:12px;background:linear-gradient(90deg,#06223b55,#063a2f55);padding:8px;border-radius:10px;display:flex;align-items:center;gap:10px}
+    .progress{flex:1;height:12px;background:#063a2f;border-radius:999px;overflow:hidden}
+    .progress > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width 0.3s}
+    .modal-backdrop{position:fixed;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}
+    .modal{width:92%;max-width:420px;background:linear-gradient(180deg,#0b2a2a,#04293a);border-radius:12px;padding:18px;color:#fff;box-shadow:0 30px 80px rgba(0,0,0,0.6)}
+    .adbar{height:10px;background:#063a2f;border-radius:10px;overflow:hidden;margin-top:12px}
+    .adbar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent-2),var(--accent));transition:width 0.15s}
+    @media (min-width:560px){.app{transform:scale(1);}}
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:#04293a;padding:10px 14px;border-radius:8px;color:#eaffff}
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <div class="header">
+      <div class="avatar">R</div>
+      <div>
+        <h1>Rồng Linh Thạch</h1>
+        <div class="sub">Nuôi rồng • Tạo linh thạch • Đồng bộ với server</div>
       </div>
     </div>
 
-    <div id="modalRoot" style="display:none"></div>
-    <div id="toastRoot" style="display:none"></div>
+    <div class="stage">
+      <div class="dragon-wrap">
+        <div class="dragon-card">
+          <svg class="dragon" viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="g1" x1="0" x2="1">
+                <stop offset="0" stop-color="#7afcff"/>
+                <stop offset="1" stop-color="#7afcff" stop-opacity="0.6"/>
+              </linearGradient>
+            </defs>
+            <g class="breath">
+              <ellipse cx="100" cy="84" rx="64" ry="36" fill="#073a2a"/>
+              <path d="M40 70 q30 -40 80 -35 q40 3 60 35 q-12 18 -52 29 q-34 6 -86 -29z" fill="#10473b"/>
+              <circle cx="140" cy="55" r="8" fill="#ffdb6b"/>
+              <circle cx="90" cy="55" r="6" fill="#fff"/>
+              <circle cx="92" cy="56" r="2" fill="#000"/>
+              <path d="M60 35 q8 -12 18 -12 q6 0 12 8" stroke="#ffd57a" stroke-width="3" fill="none" stroke-linecap="round"/>
+            </g>
+            <g id="gem" transform="translate(100,30)">
+              <polygon points="0,-8 6,0 0,12 -6,0" fill="#ffcc33" opacity="0.0">
+                <animate attributeName="opacity" values="0;1;0" dur="1.2s" repeatCount="indefinite"/>
+              </polygon>
+            </g>
+          </svg>
 
-    <script>
-      // --- CONFIG: thay API_BASE nếu server không chạy trên localhost ---
-      const API_BASE = 'https://dragon-spirit-app.onrender.com';
+          <div class="sparkle-layer" id="sparkle-layer"></div>
 
-      // --- state ---
-      const KEY = 'dragon_spirit_save_v2';
-      let state = {
-        userId: null,
-        username: null,
-        level:1,
-        rate:1, // per second
-        gems:0,
-        cost:100,
-        farming:false,
-        farmEnd:0,
-        farmDuration:0,
-        offlineBonus:0,
-        buffs:[],
-        lastTick: Date.now()
-      };
+          <div class="info">
+            <div class="level" id="levelTxt">Lv. 1</div>
+            <div class="cost" id="costTxt">
+              Chi phí nâng cấp tiếp theo: <strong id="costVal">100</strong> linh thạch
+            </div>
+          </div>
 
-      // load saved
-      try {
-        const raw = localStorage.getItem(KEY);
-        if (raw) Object.assign(state, JSON.parse(raw));
-      } catch(e){ console.warn(e) }
+        </div>
+      </div>
 
-let tgUser = null;
+      <div class="stats">
+        <div class="stat">
+          <div class="v" id="gemsVal">0</div>
+          <div class="sub">Linh thạch</div>
+        </div>
+        <div class="stat">
+          <div class="v" id="rateVal">1 /s</div>
+          <div class="sub">Tốc độ</div>
+        </div>
+        <div class="stat">
+          <div class="v" id="offlineVal">0</div>
+          <div class="sub">Offline</div>
+        </div>
+      </div>
 
-// 1. Nếu Telegram cấp initData
-if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-    tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-}
+      <div class="controls">
+        <button class="btn" id="startBtn">Bắt đầu nuôi rồng</button>
+        <button class="btn secondary" id="upgradeBtn">Nâng cấp (100)</button>
+      </div>
 
-// 2. Nếu không có, fallback bằng query string
-if (!tgUser) {
-    const url = new URL(location.href);
-    const uid = url.searchParams.get("uid");
-    const uname = url.searchParams.get("uname") || "Player";
-    if (uid) {
-        tgUser = {
-            id: uid,
-            username: uname,
-            first_name: uname
+      <div class="farm-banner" id="farmBanner" style="display:none">
+        <div style="font-size:13px">Đang sản xuất tự động</div>
+        <div class="progress"><i id="progressBar" style="width:0%"></i></div>
+        <div style="min-width:74px;text-align:center" id="durationText">00:00:00</div>
+      </div>
+
+      <div class="menu">
+        <div class="item" id="tasksBtn">🎯 Nhiệm Vụ</div>
+        <div class="item" id="buffBtn">✨ Buff</div>
+        <div class="item" id="inviteBtn">👥 Mời Bạn Bè</div>
+        <div class="item" id="storeBtn">🏪 Quy Đổi</div>
+        <div class="item" id="leaderBtn">🏆 Xếp Hạng</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="modalRoot" style="display:none"></div>
+  <div id="toastRoot" style="display:none"></div>
+
+  <script>
+    // --- CONFIG ---
+    const API_BASE = 'https://dragon-spirit-app.onrender.com';
+    const KEY = 'dragon_spirit_save_v2';
+
+    // --- STATE ---
+    let state = {
+      userId: null,
+      username: null,
+      firstName: null,
+      lastName: null,
+      level: 1,
+      rate: 1,
+      gems: 0,
+      cost: 100,
+      farming: false,
+      farmEnd: 0,
+      farmDuration: 0,
+      offlineBonus: 0,
+      buffs: [],
+      lastTick: Date.now()
+    };
+
+    // load saved first
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) Object.assign(state, JSON.parse(raw));
+    } catch(e){ console.warn(e); }
+
+    // --- TELEGRAM USER: dùng initDataUnsafe + fallback URL ---
+    const rawInitData = window.Telegram?.WebApp?.initData || "";
+    const unsafe = window.Telegram?.WebApp?.initDataUnsafe || {};
+    let u = unsafe.user || null;
+
+    // fallback: lấy từ ?uid nếu (vì lý do gì đó) không có initDataUnsafe
+    if (!u) {
+      const url = new URL(location.href);
+      const uid = url.searchParams.get("uid");
+      const uname = url.searchParams.get("uname") || "Player";
+      if (uid) {
+        u = {
+          id: uid,
+          username: uname,
+          first_name: uname
         };
+      }
     }
-}
 
-// 3. Nếu vẫn không có → lỗi
-if (!tgUser) {
-    alert("Không thể lấy thông tin Telegram!");
-    throw new Error("NO_TELEGRAM_USER");
-}
+    if (!u) {
+      alert("Game này chỉ hoạt động bên trong Telegram Mini App.");
+      throw new Error("No Telegram User Found");
+    }
 
-// GÁN VÀO STATE
-state.userId = "tg_" + tgUser.id;
-state.username = tgUser.username || tgUser.first_name;
-state.firstName = tgUser.first_name || null;
-state.lastName = tgUser.last_name || null;
+    state.userId = "tg_" + u.id;
+    state.username = u.username || u.first_name || "Player";
+    state.firstName = u.first_name || null;
+    state.lastName = u.last_name || null;
 
-// ================================================
-//  LOAD SAVE LOCAL
-// ================================================
-try {
-  const raw = localStorage.getItem(KEY);
-  if (raw) Object.assign(state, JSON.parse(raw));
-} catch (e) { console.warn(e); }
+    // --- DOM refs ---
+    const lvl = document.getElementById('levelTxt');
+    const costVal = document.getElementById('costVal');
+    const gemsVal = document.getElementById('gemsVal');
+    const rateVal = document.getElementById('rateVal');
+    const offlineVal = document.getElementById('offlineVal');
+    const startBtn = document.getElementById('startBtn');
+    const upgradeBtn = document.getElementById('upgradeBtn');
+    const farmBanner = document.getElementById('farmBanner');
+    const progressBar = document.getElementById('progressBar');
+    const durationText = document.getElementById('durationText');
+    const sparkleLayer = document.getElementById('sparkle-layer');
+    const modalRoot = document.getElementById('modalRoot');
+    const toastRoot = document.getElementById('toastRoot');
 
+    function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
+    function fmtTime(s){
+      s = Math.max(0, Math.floor(s));
+      const h = String(Math.floor(s/3600)).padStart(2,'0');
+      const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
+      const sec = String(s%60).padStart(2,'0');
+      return `${h}:${m}:${sec}`;
+    }
 
-      // DOM refs
-      const lvl = document.getElementById('levelTxt');
-      const costVal = document.getElementById('costVal');
-      const gemsVal = document.getElementById('gemsVal');
-      const rateVal = document.getElementById('rateVal');
-      const offlineVal = document.getElementById('offlineVal');
-      const startBtn = document.getElementById('startBtn');
-      const upgradeBtn = document.getElementById('upgradeBtn');
-      const farmBanner = document.getElementById('farmBanner');
-      const progressBar = document.getElementById('progressBar');
-      const durationText = document.getElementById('durationText');
-      const sparkleLayer = document.getElementById('sparkle-layer');
-      const modalRoot = document.getElementById('modalRoot');
-      const toastRoot = document.getElementById('toastRoot');
+    function showToast(text, ttl=2000){
+      toastRoot.style.display='block';
+      toastRoot.innerHTML = `<div class='toast'>${text}</div>`;
+      setTimeout(()=>{ toastRoot.style.display='none'; }, ttl);
+    }
 
-      function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
-      function fmtTime(s){
-        s = Math.max(0, Math.floor(s));
-        const h = String(Math.floor(s/3600)).padStart(2,'0');
-        const m = String(Math.floor((s%3600)/60)).padStart(2,'0');
-        const sec = String(s%60).padStart(2,'0');
-        return `${h}:${m}:${sec}`;
+    function spawnSpark(xPct,yPct){
+      const el = document.createElement('div');
+      el.className='sparkle';
+      el.style.left = xPct + '%';
+      el.style.top = yPct + '%';
+      sparkleLayer.appendChild(el);
+      setTimeout(()=>{ 
+        el.style.opacity=1; 
+        el.style.transform='scale(1)'; 
+        el.style.transition='all 600ms cubic-bezier(.2,.9,.3,1)'; 
+      }, 20);
+      setTimeout(()=>{ 
+        el.style.opacity=0; 
+        el.style.transform='scale(1.6)'; 
+      }, 520);
+      setTimeout(()=>{ 
+        if (el.parentNode) sparkleLayer.removeChild(el); 
+      }, 900);
+    }
+
+    function updateUI(){
+      lvl.innerText = 'Lv. ' + state.level;
+      costVal.innerText = state.cost;
+      gemsVal.innerText = Math.floor(state.gems);
+      rateVal.innerText = Math.round(state.rate*100)/100 + ' /s';
+      offlineVal.innerText = Math.round(state.offlineBonus*100)/100;
+      upgradeBtn.innerText = `Nâng cấp (${state.cost})`;
+
+      if(state.farming && state.farmEnd > Date.now()){
+        farmBanner.style.display='flex';
+        const total = state.farmDuration;
+        const rem = Math.max(0, Math.floor((state.farmEnd - Date.now())/1000));
+        const done = total - rem;
+        const pct = Math.min(100, Math.round((done/total)*100));
+        progressBar.style.width = pct + '%';
+        durationText.innerText = fmtTime(rem);
+      } else {
+        farmBanner.style.display='none';
       }
+    }
 
-      function showToast(text, ttl=2000){
-        toastRoot.style.display='block';
-        toastRoot.innerHTML = `<div class='toast'>${text}</div>`;
-        setTimeout(()=>{ toastRoot.style.display='none'; }, ttl);
-      }
+    updateUI();
 
-      function spawnSpark(xPct,yPct){
-        const el = document.createElement('div');
-        el.className='sparkle';
-        el.style.left = xPct + '%';
-        el.style.top = yPct + '%';
-        sparkleLayer.appendChild(el);
-        setTimeout(()=>{ el.style.opacity=1; el.style.transform='scale(1)'; el.style.transition='all 600ms cubic-bezier(.2,.9,.3,1)'; }, 20);
-        setTimeout(()=>{ el.style.opacity=0; el.style.transform='scale(1.6)'; }, 520);
-        setTimeout(()=>{ if (el.parentNode) sparkleLayer.removeChild(el); }, 900);
-      }
+    // TICK
+    setInterval(()=>{
+      const now = Date.now();
+      const dt = Math.floor((now - state.lastTick)/1000);
+      if (dt <= 0) { state.lastTick = now; return; }
 
-      function updateUI(){
-        lvl.innerText = 'Lv. ' + state.level;
-        costVal.innerText = state.cost;
-        gemsVal.innerText = Math.floor(state.gems);
-        rateVal.innerText = Math.round(state.rate*100)/100 + ' /s';
-        offlineVal.innerText = Math.round(state.offlineBonus*100)/100;
-        upgradeBtn.innerText = `Nâng cấp (${state.cost})`;
-        if(state.farming && state.farmEnd > Date.now()){
-          farmBanner.style.display='flex';
-          const total = state.farmDuration;
-          const rem = Math.max(0, Math.floor((state.farmEnd - Date.now())/1000));
-          const done = total - rem;
-          const pct = Math.min(100, Math.round((done/total)*100));
-          progressBar.style.width = pct + '%';
-          durationText.innerText = fmtTime(rem);
-        } else {
-          farmBanner.style.display='none';
+      if (state.farming && state.farmEnd > Date.now()){
+        const produce = state.rate * dt;
+        state.gems += produce;
+        for(let i=0;i<Math.min(3,Math.ceil(produce));i++){
+          spawnSpark(40 + Math.random()*50, 20 + Math.random()*50);
         }
+        scheduleSync();
+      } else if (state.farming && state.farmEnd <= Date.now()){
+        state.farming = false;
+        showToast('Phiên nuôi rồng hoàn thành!');
       }
-
+      state.lastTick = now;
       updateUI();
+      save();
+    },1000);
 
-      // TICK
-      setInterval(()=>{
-        const now = Date.now();
-        const dt = Math.floor((now - state.lastTick)/1000);
-        if (dt <= 0) { state.lastTick = now; return; }
-
-        if (state.farming && state.farmEnd > Date.now()){
-          const produce = state.rate * dt;
-          state.gems += produce;
-          // small visual
-          for(let i=0;i<Math.min(3,Math.ceil(produce));i++){
-            spawnSpark(40 + Math.random()*50, 20 + Math.random()*50);
-          }
-          scheduleSync(); // gems changed -> schedule sync
-        } else if (state.farming && state.farmEnd <= Date.now()){
-          state.farming = false;
-          showToast('Phiên nuôi rồng hoàn thành!');
+    // OFFLINE bonus on focus
+    window.addEventListener('focus', ()=>{
+      const now = Date.now();
+      const last = state.lastTick || now;
+      const down = Math.floor((now - last)/1000);
+      if (down > 10 && !state.farming){
+        const offline = Math.min(3600, Math.floor(down/2) * state.rate);
+        if (offline > 0) {
+          state.gems += offline;
+          state.offlineBonus += offline;
+          showToast(`Bạn nhận ${Math.round(offline)} linh thạch khi offline`);
+          scheduleSync();
+          save(); updateUI();
         }
-        state.lastTick = now;
-        updateUI();
-        save();
-      },1000);
-
-      // OFFLINE bonus on focus
-      window.addEventListener('focus', ()=>{
-        const now = Date.now();
-        const last = state.lastTick || now;
-        const down = Math.floor((now - last)/1000);
-        if (down > 10 && !state.farming){
-          const offline = Math.min(3600, Math.floor(down/2) * state.rate);
-          if (offline > 0) {
-            state.gems += offline;
-            state.offlineBonus += offline;
-            showToast(`Bạn nhận ${Math.round(offline)} linh thạch khi offline`);
-            scheduleSync();
-            save(); updateUI();
-          }
-        }
-        state.lastTick = now;
-      });
-
-      // fake rewarded ad flow
-      function showAdFlow(durationSeconds=8){
-        return new Promise((resolve)=>{
-          modalRoot.style.display='block';
-          modalRoot.innerHTML = `
-            <div class='modal-backdrop'>
-              <div class='modal'>
-                <div style='font-weight:700;font-size:16px'>Quảng cáo thưởng</div>
-                <div style='margin-top:8px;font-size:13px'>Xem quảng cáo để bắt đầu phiên nuôi rồng tự động (${durationSeconds}s)</div>
-                <div class='adbar'><i id='adBar' style='width:0%'></i></div>
-                <div style='display:flex;gap:10px;margin-top:12px'>
-                  <button id='skipAd' class='btn secondary' style='flex:1'>Bỏ qua</button>
-                  <button id='closeAd' class='btn' style='flex:1'>Ẩn</button>
-                </div>
-              </div>
-            </div>`;
-
-          const adBar = document.getElementById('adBar');
-          const skipBtn = document.getElementById('skipAd');
-          const closeBtn = document.getElementById('closeAd');
-
-          let elapsed = 0;
-          const interval = setInterval(()=>{
-            elapsed++;
-            const pct = Math.round((elapsed/durationSeconds)*100);
-            adBar.style.width = pct + '%';
-            if (elapsed >= durationSeconds) { clearInterval(interval); modalRoot.style.display='none'; resolve(true); }
-          },1000);
-
-          skipBtn.onclick = ()=>{ clearInterval(interval); modalRoot.style.display='none'; resolve(false); showToast('Bạn đã bỏ qua quảng cáo.'); };
-          closeBtn.onclick = ()=>{ clearInterval(interval); modalRoot.style.display='none'; resolve(true); };
-        });
       }
+      state.lastTick = now;
+    });
 
-      // Start
-      startBtn.addEventListener('click', async ()=>{
-        const ok = await showAdFlow(6 + Math.floor(state.level/2));
-        if (!ok) return;
-        const duration = 30 + state.level * 10;
-        state.farmDuration = duration;
-        state.farmEnd = Date.now() + duration*1000;
-        state.farming = true;
-        state.lastTick = Date.now();
-        for(let i=0;i<8;i++){ setTimeout(()=>spawnSpark(45 + Math.random()*40, 20 + Math.random()*50), i*120); }
-        showToast('Rồng bắt đầu tạo linh thạch!');
-        updateUI(); save();
-        // scheduleSync not necessary immediately, gems will be produced during ticks and scheduleSync will run there
-      });
-
-      // Upgrade
-      upgradeBtn.addEventListener('click', ()=>{
-        if (state.gems >= state.cost) {
-          state.gems -= state.cost;
-          state.level += 1;
-          state.rate = Math.round((state.rate * 1.22 + 0.01) * 100)/100;
-          state.cost = Math.round(state.cost * 1.45);
-          showToast('Nâng cấp thành công!');
-          for(let i=0;i<12;i++){ setTimeout(()=>spawnSpark(30 + Math.random()*60, 10 + Math.random()*60), i*80); }
-          updateUI(); save();
-          scheduleSync(); // gems reduced -> sync
-        } else {
-          showToast('Không đủ linh thạch');
-        }
-      });
-
-      // menu handlers (unchanged)
-      document.getElementById('leaderBtn').onclick = async () => {
-        try {
-          const response = await fetch(`${API_BASE}/leaderboard`);
-          const json = await response.json();
-          if (!json.success) throw new Error('no data');
-          const leaderboard = json.leaderboard || [];
-          let content = '<div style="font-weight:700; font-size:18px; margin-bottom:10px;">Bảng Xếp Hạng</div>';
-          leaderboard.forEach((player, index) => {
-            content += `<div style="margin-top:8px">#${index + 1} - ${player.username}: ${player.gems} linh thạch</div>`;
-          });
-          content += `<div style="margin-top:12px; display: flex; justify-content: center;"><button id="closeLeaderboard" class="btn secondary" style="flex:1">Đóng</button></div>`;
-          showModal(content);
-          setTimeout(()=>{ document.getElementById('closeLeaderboard').onclick = closeModal; }, 50);
-        } catch (error) {
-          console.error(error);
-          showToast('Không thể tải bảng xếp hạng!');
-        }
-      };
-
-      document.getElementById('tasksBtn').onclick = ()=> {
-        showModal(`<div style='font-weight:700'>Nhiệm vụ</div>
-          <div style='margin-top:8px'>- Tạo 500 linh thạch → thưởng 50<br>- Xem 3 quảng cáo → thưởng 200<br>- Nâng cấp 5 lần → thưởng 300</div>
-          <div style='margin-top:12px;display:flex;gap:8px'><button id='close' class='btn' style='flex:1'>Đóng</button></div>`);
-        setTimeout(()=>{ const close = document.getElementById('close'); if (close) close.onclick = closeModal; }, 50);
-      };
-      document.getElementById('buffBtn').onclick = ()=> {
-        showModal(`<div style='font-weight:700'>Buff</div>
-          <div style='margin-top:8px'>Một số buff ngắn hạn: x2 tốc độ (30s), x5 tốc độ (10s).<br>Bạn có thể mua bằng linh thạch hoặc nhận thử qua quảng cáo.</div>
-          <div style='margin-top:12px;display:flex;gap:8px'>
-            <button id='watchBuff' class='btn secondary' style='flex:1'>Xem QC để thử</button>
-            <button id='buyBuff' class='btn' style='flex:1'>Mua (200)</button>
-          </div>`);
-        setTimeout(()=>{
-          const wb = document.getElementById('watchBuff');
-          const bb = document.getElementById('buyBuff');
-          if (wb) wb.onclick = async ()=>{ closeModal(); const ok = await showAdFlow(5); if (ok){ applyBuff(2,30); showToast('Buff x2 (30s) kích hoạt'); } };
-          if (bb) bb.onclick = ()=>{ if (state.gems>=200){ state.gems-=200; applyBuff(5,10); showToast('Buff x5 (10s) kích hoạt'); save(); updateUI(); scheduleSync(); closeModal(); } else showToast('Không đủ linh thạch'); };
-        },50);
-      };
-      document.getElementById('inviteBtn').onclick = ()=>{ showToast('Chức năng mời bạn bè chưa kết nối (demo)'); };
-      document.getElementById('storeBtn').onclick = ()=>{ showModal(`<div style='font-weight:700'>Quy đổi</div><div style='margin-top:8px'>Đổi linh thạch lấy quà (demo)</div><div style='display:flex;gap:8px;margin-top:12px'><button id='c1' class='btn' style='flex:1'>Đổi 100 → 10 gem</button><button id='c2' class='btn secondary' style='flex:1'>Đóng</button></div>`); setTimeout(()=>{ document.getElementById('c1').onclick = ()=>{ if(state.gems>=100){ state.gems-=100; showToast('Đổi thành công!'); save(); updateUI(); scheduleSync(); closeModal(); } else showToast('Không đủ linh thạch'); }; document.getElementById('c2').onclick = closeModal; },50); };
-
-      function showModal(inner){
+    // fake rewarded ad flow
+    function showAdFlow(durationSeconds=8){
+      return new Promise((resolve)=>{
         modalRoot.style.display='block';
-        modalRoot.innerHTML = `<div class='modal-backdrop'><div class='modal'>${inner}</div></div>`;
-        const close = document.querySelector('.modal #close');
-        if (close) close.onclick = closeModal;
-      }
-      function closeModal(){
-        modalRoot.style.display='none';
-        modalRoot.innerHTML = '';
-      }
+        modalRoot.innerHTML = `
+          <div class='modal-backdrop'>
+            <div class='modal'>
+              <div style='font-weight:700;font-size:16px'>Quảng cáo thưởng</div>
+              <div style='margin-top:8px;font-size:13px'>
+                Xem quảng cáo để bắt đầu phiên nuôi rồng tự động (${durationSeconds}s)
+              </div>
+              <div class='adbar'><i id='adBar' style='width:0%'></i></div>
+              <div style='display:flex;gap:10px;margin-top:12px'>
+                <button id='skipAd' class='btn secondary' style='flex:1'>Bỏ qua</button>
+                <button id='closeAd' class='btn' style='flex:1'>Ẩn</button>
+              </div>
+            </div>
+          </div>`;
 
-      // buffs
-      let activeBuff = {mul:1, end:0};
-      function applyBuff(mul,sec){
-        activeBuff.mul = mul; activeBuff.end = Date.now() + sec*1000;
-        state.rate = Math.round((state.rate * mul) * 100)/100;
-        setTimeout(()=>{
-          state.rate = Math.round((state.rate / mul) * 100)/100;
-          activeBuff = {mul:1,end:0};
-          showToast('Buff kết thúc'); save(); updateUI();
-        }, sec*1000);
-        save(); updateUI();
-      }
+        const adBar = document.getElementById('adBar');
+        const skipBtn = document.getElementById('skipAd');
+        const closeBtn = document.getElementById('closeAd');
 
-      for(let i=0;i<12;i++){ setTimeout(()=>spawnSpark(40 + Math.random()*40, 30 + Math.random()*40), i*100); }
+        let elapsed = 0;
+        const interval = setInterval(()=>{
+          elapsed++;
+          const pct = Math.round((elapsed/durationSeconds)*100);
+          adBar.style.width = pct + '%';
+          if (elapsed >= durationSeconds) { 
+            clearInterval(interval); 
+            modalRoot.style.display='none'; 
+            resolve(true); 
+          }
+        },1000);
 
-      // ---------- SYNC LOGIC (improved with atomic collect) ----------
-  let syncTimer = null;
-  let collectTimer = null;
-  let lastSyncAt = 0;
-
-  // pending amount to send via /collect
-  let pendingCollect = 0;
-
-  // Call this when you "produce" gems (e.g., in tick when adding gems)
-  // Instead of immediately calling syncToServer, accumulate into pendingCollect and scheduleCollect().
-  function markCollected(amount) {
-    pendingCollect += Math.max(0, Math.floor(amount));
-    // schedule immediate small-batched send
-    if (collectTimer) clearTimeout(collectTimer);
-    collectTimer = setTimeout(() => { sendCollect(); }, 700); // 700ms debounce
-  }
-
-  async function sendCollect() {
-    if (pendingCollect <= 0) return;
-    const amount = pendingCollect;
-    pendingCollect = 0;
-    if (collectTimer) { clearTimeout(collectTimer); collectTimer = null; }
-
-    try {
-      const res = await fetch(`${API_BASE}/collect`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: state.userId, amount })
+        skipBtn.onclick = ()=>{
+          clearInterval(interval); 
+          modalRoot.style.display='none'; 
+          resolve(false); 
+          showToast('Bạn đã bỏ qua quảng cáo.');
+        };
+        closeBtn.onclick = ()=>{
+          clearInterval(interval); 
+          modalRoot.style.display='none'; 
+          resolve(true); 
+        };
       });
-      const json = await res.json();
-      if (json && json.success) {
-        // update client to server-authoritative value
-        state.gems = Number(json.gems) || state.gems;
-        save(); updateUI();
-        // small toast (optional)
-        // showToast(`+${amount} đã lưu`, 900);
-      } else {
-        console.warn('Collect failed', json);
-        // If failed, re-add to pendingCollect for retry
-        pendingCollect += amount;
-        // schedule retry
-        if (!collectTimer) collectTimer = setTimeout(sendCollect, 2000);
-      }
-    } catch (e) {
-      console.warn('Collect network error', e);
-      pendingCollect += amount;
-      if (!collectTimer) collectTimer = setTimeout(sendCollect, 2000);
     }
-  }
 
-  // Legacy scheduleSync (keeps /sync for full state updates)
-  function scheduleSync() {
-    if (syncTimer) clearTimeout(syncTimer);
-    syncTimer = setTimeout(()=>{ syncToServer(); }, 1500);
-  }
-
-  async function syncToServer() {
-    syncTimer = null;
-    const now = Date.now();
-    if (now - lastSyncAt < 800) return;
-    lastSyncAt = now;
-    try {
-      const payload = {
-        userId: state.userId,
-        username: state.username,
-        firstName: state.firstName,
-        lastName: state.lastName,
-        gems: Math.floor(state.gems),
-        level: state.level
-      };
-
-      const res = await fetch(`${API_BASE}/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const json = await res.json();
-      if (json && json.success) {
-        // server authoritative gems (sync might increase)
-        state.gems = Number(json.gems) || state.gems;
-        save(); updateUI();
-        // optional toast: showToast('Đã đồng bộ với server', 1200);
-      } else {
-        console.warn('Sync failed', json);
+    // Start
+    startBtn.addEventListener('click', async ()=>{
+      const ok = await showAdFlow(6 + Math.floor(state.level/2));
+      if (!ok) return;
+      const duration = 30 + state.level * 10;
+      state.farmDuration = duration;
+      state.farmEnd = Date.now() + duration*1000;
+      state.farming = true;
+      state.lastTick = Date.now();
+      for(let i=0;i<8;i++){
+        setTimeout(()=>spawnSpark(45 + Math.random()*40, 20 + Math.random()*50), i*120);
       }
-    } catch (e) {
-      console.warn('Sync error', e);
-    }
-  }
+      showToast('Rồng bắt đầu tạo linh thạch!');
+      updateUI(); save();
+    });
 
-    </script>
-  </body>
-  </html>
+    // Upgrade
+    upgradeBtn.addEventListener('click', ()=>{
+      if (state.gems >= state.cost) {
+        state.gems -= state.cost;
+        state.level += 1;
+        state.rate = Math.round((state.rate * 1.22 + 0.01) * 100)/100;
+        state.cost = Math.round(state.cost * 1.45);
+        showToast('Nâng cấp thành công!');
+        for(let i=0;i<12;i++){
+          setTimeout(()=>spawnSpark(30 + Math.random()*60, 10 + Math.random()*60), i*80);
+        }
+        updateUI(); save();
+        scheduleSync();
+      } else {
+        showToast('Không đủ linh thạch');
+      }
+    });
+
+    // menu handlers
+    document.getElementById('leaderBtn').onclick = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/leaderboard`);
+        const json = await response.json();
+        if (!json.success) throw new Error('no data');
+        const leaderboard = json.leaderboard || [];
+        let content = '<div style="font-weight:700; font-size:18px; margin-bottom:10px;">Bảng Xếp Hạng</div>';
+        leaderboard.forEach((player, index) => {
+          content += `<div style="margin-top:8px">#${index + 1} - ${player.username}: ${player.gems} linh thạch</div>`;
+        });
+        content += `<div style="margin-top:12px; display: flex; justify-content: center;">
+          <button id="closeLeaderboard" class="btn secondary" style="flex:1">Đóng</button>
+        </div>`;
+        showModal(content);
+        setTimeout(()=>{ 
+          const btn = document.getElementById('closeLeaderboard'); 
+          if (btn) btn.onclick = closeModal; 
+        }, 50);
+      } catch (error) {
+        console.error(error);
+        showToast('Không thể tải bảng xếp hạng!');
+      }
+    };
+
+    document.getElementById('tasksBtn').onclick = ()=> {
+      showModal(`<div style='font-weight:700'>Nhiệm vụ</div>
+        <div style='margin-top:8px'>
+          - Tạo 500 linh thạch → thưởng 50<br>
+          - Xem 3 quảng cáo → thưởng 200<br>
+          - Nâng cấp 5 lần → thưởng 300
+        </div>
+        <div style='margin-top:12px;display:flex;gap:8px'>
+          <button id='close' class='btn' style='flex:1'>Đóng</button>
+        </div>`);
+      setTimeout(()=>{ 
+        const close = document.getElementById('close'); 
+        if (close) close.onclick = closeModal; 
+      }, 50);
+    };
+
+    document.getElementById('buffBtn').onclick = ()=> {
+      showModal(`<div style='font-weight:700'>Buff</div>
+        <div style='margin-top:8px'>
+          Một số buff ngắn hạn: x2 tốc độ (30s), x5 tốc độ (10s).<br>
+          Bạn có thể mua bằng linh thạch hoặc nhận thử qua quảng cáo.
+        </div>
+        <div style='margin-top:12px;display:flex;gap:8px'>
+          <button id='watchBuff' class='btn secondary' style='flex:1'>Xem QC để thử</button>
+          <button id='buyBuff' class='btn' style='flex:1'>Mua (200)</button>
+        </div>`);
+      setTimeout(()=>{
+        const wb = document.getElementById('watchBuff');
+        const bb = document.getElementById('buyBuff');
+        if (wb) wb.onclick = async ()=>{
+          closeModal(); 
+          const ok = await showAdFlow(5); 
+          if (ok){ applyBuff(2,30); showToast('Buff x2 (30s) kích hoạt'); }
+        };
+        if (bb) bb.onclick = ()=>{
+          if (state.gems>=200){
+            state.gems-=200; 
+            applyBuff(5,10); 
+            showToast('Buff x5 (10s) kích hoạt'); 
+            save(); updateUI(); scheduleSync(); 
+            closeModal();
+          } else showToast('Không đủ linh thạch');
+        };
+      },50);
+    };
+
+    document.getElementById('inviteBtn').onclick = ()=>{ 
+      showToast('Chức năng mời bạn bè chưa kết nối (demo)'); 
+    };
+
+    document.getElementById('storeBtn').onclick = ()=>{
+      showModal(`<div style='font-weight:700'>Quy đổi</div>
+        <div style='margin-top:8px'>Đổi linh thạch lấy quà (demo)</div>
+        <div style='display:flex;gap:8px;margin-top:12px'>
+          <button id='c1' class='btn' style='flex:1'>Đổi 100 → 10 gem</button>
+          <button id='c2' class='btn secondary' style='flex:1'>Đóng</button>
+        </div>`);
+      setTimeout(()=>{
+        const c1 = document.getElementById('c1');
+        const c2 = document.getElementById('c2');
+        if (c1) c1.onclick = ()=>{
+          if(state.gems>=100){
+            state.gems-=100; 
+            showToast('Đổi thành công!'); 
+            save(); updateUI(); scheduleSync(); 
+            closeModal(); 
+          } else showToast('Không đủ linh thạch');
+        };
+        if (c2) c2.onclick = closeModal;
+      },50);
+    };
+
+    function showModal(inner){
+      modalRoot.style.display='block';
+      modalRoot.innerHTML = `<div class='modal-backdrop'><div class='modal'>${inner}</div></div>`;
+    }
+    function closeModal(){
+      modalRoot.style.display='none';
+      modalRoot.innerHTML = '';
+    }
+
+    // buffs
+    let activeBuff = {mul:1, end:0};
+    function applyBuff(mul,sec){
+      activeBuff.mul = mul; 
+      activeBuff.end = Date.now() + sec*1000;
+      state.rate = Math.round((state.rate * mul) * 100)/100;
+      setTimeout(()=>{
+        state.rate = Math.round((state.rate / mul) * 100)/100;
+        activeBuff = {mul:1,end:0};
+        showToast('Buff kết thúc'); save(); updateUI();
+      }, sec*1000);
+      save(); updateUI();
+    }
+
+    for(let i=0;i<12;i++){ 
+      setTimeout(()=>spawnSpark(40 + Math.random()*40, 30 + Math.random()*40), i*100); 
+    }
+
+    // ---------- SYNC LOGIC: dùng initData ----------
+    let syncTimer = null;
+    let lastSyncAt = 0;
+
+    function scheduleSync() {
+      if (!rawInitData) return; // nếu không có initData thì khỏi sync server
+      if (syncTimer) clearTimeout(syncTimer);
+      syncTimer = setTimeout(syncToServer, 1500);
+    }
+
+    async function syncToServer() {
+      if (!rawInitData) return;
+      syncTimer = null;
+      const now = Date.now();
+      if (now - lastSyncAt < 800) return;
+      lastSyncAt = now;
+      try {
+        const payload = {
+          initData: rawInitData,
+          gems: Math.floor(state.gems),
+          level: state.level
+        };
+
+        const res = await fetch(`${API_BASE}/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const json = await res.json();
+        if (json && json.success) {
+          state.gems = Number(json.gems) || state.gems;
+          state.level = Number(json.level) || state.level;
+          save(); updateUI();
+        } else {
+          console.warn('Sync failed', json);
+        }
+      } catch (e) {
+        console.warn('Sync error', e);
+      }
+    }
+  </script>
+</body>
+</html>

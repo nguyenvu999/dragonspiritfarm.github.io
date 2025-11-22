@@ -1,20 +1,21 @@
 // ==============================
-//      CONFIG (KHÔNG DÙNG .env)
+//      CONFIG
 // ==============================
-const BOT_TOKEN = "8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E";     // Telegram bot token
-const MONGO_URL = "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";     // MongoDB Atlas URL
-const WEBAPP_URL = "https://nguyenvu999.github.io/dragonspiritfarm.github.io/";    // WebApp URL (Mini App)
+// NÊN để các giá trị này vào biến môi trường khi deploy
+const BOT_TOKEN  = process.env.BOT_TOKEN  || "8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E";
+const MONGO_URL  = process.env.MONGO_URL  || "mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority";
+const WEBAPP_URL = process.env.WEBAPP_URL || "https://nguyenvu999.github.io/dragonspiritfarm.github.io/";
 
 // ==============================
 //      IMPORT MODULES
 // ==============================
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const helmet = require("helmet");
-const rateLimit = require("express-rate-limit");
+const express    = require("express");
+const mongoose   = require("mongoose");
+const cors       = require("cors");
+const helmet     = require("helmet");
+const rateLimit  = require("express-rate-limit");
 const bodyParser = require("body-parser");
-const crypto = require("crypto");
+const crypto     = require("crypto");
 const { Telegraf } = require("telegraf");
 
 // ==============================
@@ -25,7 +26,6 @@ app.use(cors());
 app.use(helmet());
 app.use(bodyParser.json());
 
-// Apply rate limiting to all API routes
 app.use(
   rateLimit({
     windowMs: 10 * 1000,
@@ -44,15 +44,18 @@ mongoose
 // ==============================
 //      DATABASE MODEL
 // ==============================
-const PlayerSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true },
-  username: String,
-  firstName: String,
-  lastName: String,
+const PlayerSchema = new mongoose.Schema(
+  {
+    userId:   { type: String, required: true, unique: true }, // ví dụ "123456789" (id Telegram)
+    username: String,
+    firstName:String,
+    lastName: String,
 
-  gems: { type: Number, default: 0 },
-  level: { type: Number, default: 1 },
-});
+    gems:  { type: Number, default: 0 },
+    level: { type: Number, default: 1 },
+  },
+  { timestamps: true }
+);
 
 const Player = mongoose.model("Player", PlayerSchema);
 
@@ -62,28 +65,35 @@ const Player = mongoose.model("Player", PlayerSchema);
 function verifyInitData(initData, botToken) {
   if (!initData) return null;
 
-  const encoded = decodeURIComponent(initData);
-  const params = new URLSearchParams(encoded);
+  try {
+    const encoded = decodeURIComponent(initData);
+    const params = new URLSearchParams(encoded);
 
-  const hash = params.get("hash");
-  params.delete("hash");
+    const hash = params.get("hash");
+    params.delete("hash");
 
-  const dataCheckString = [...params.entries()]
-    .map(([key, val]) => `${key}=${val}`)
-    .sort()
-    .join("\n");
+    const dataCheckString = [...params.entries()]
+      .map(([key, val]) => `${key}=${val}`)
+      .sort()
+      .join("\n");
 
-  const secretKey = crypto
-    .createHmac("sha256", "WebAppData")
-    .update(botToken)
-    .digest();
+    const secretKey = crypto
+      .createHmac("sha256", "WebAppData")
+      .update(botToken)
+      .digest();
 
-  const calculated = crypto
-    .createHmac("sha256", secretKey)
-    .update(dataCheckString)
-    .digest("hex");
+    const calculatedHash = crypto
+      .createHmac("sha256", secretKey)
+      .update(dataCheckString)
+      .digest("hex");
 
-  return calculated === hash ? Object.fromEntries(params.entries()) : null;
+    if (calculatedHash !== hash) return null;
+
+    return Object.fromEntries(params.entries());
+  } catch (e) {
+    console.error("verifyInitData error:", e);
+    return null;
+  }
 }
 
 // ==============================
@@ -91,11 +101,8 @@ function verifyInitData(initData, botToken) {
 // ==============================
 const bot = new Telegraf(BOT_TOKEN);
 
-// START command — TRUYỀN UID + UNAME
+// /start
 bot.start((ctx) => {
-  const uid = ctx.from.id;
-  const uname = ctx.from.username || ctx.from.first_name || "";
-
   ctx.reply(
     `Chào ${ctx.from.first_name}!\nNhấn /play để mở game.`,
     {
@@ -104,9 +111,7 @@ bot.start((ctx) => {
           [
             {
               text: "Mở Mini App",
-              web_app: {
-                url: WEBAPP_URL + `?uid=${uid}&uname=${uname}`
-              }
+              web_app: { url: WEBAPP_URL } // không cần ?uid nữa, dùng initData
             }
           ]
         ],
@@ -115,20 +120,15 @@ bot.start((ctx) => {
   );
 });
 
-// /play — TRUYỀN UID + UNAME
+// /play
 bot.command("play", (ctx) => {
-  const uid = ctx.from.id;
-  const uname = ctx.from.username || ctx.from.first_name || "";
-
   ctx.reply("Nhấn nút bên dưới để mở Mini App:", {
     reply_markup: {
       inline_keyboard: [
         [
           {
             text: "Mở Mini App",
-            web_app: {
-              url: WEBAPP_URL + `?uid=${uid}&uname=${uname}`
-            }
+            web_app: { url: WEBAPP_URL }
           }
         ]
       ],
@@ -136,82 +136,90 @@ bot.command("play", (ctx) => {
   });
 });
 
-
-// Leaderboard command
+// /leaderboard (trong bot)
 bot.command("leaderboard", async (ctx) => {
   const list = await Player.find().sort({ gems: -1 }).limit(20);
-
   let msg = "<b>🏆 BẢNG XẾP HẠNG</b>\n\n";
   list.forEach((p, i) => {
     msg += `${i + 1}. <b>${p.username || "NoName"}</b>: ${p.gems} 💎\n`;
   });
-
   ctx.reply(msg, { parse_mode: "HTML" });
 });
 
-bot.launch();
-console.log("BOT RUNNING...");
+bot.launch().then(() => console.log("BOT RUNNING..."));
+process.once("SIGINT", () => bot.stop("SIGINT"));
+process.once("SIGTERM", () => bot.stop("SIGTERM"));
 
 // ==============================
-//      API — SYNC USER (KHÔNG TẠO USER)
+//      API — SYNC (dùng initData)
+//      Frontend gửi: { initData, gems, level }
 // ==============================
 app.post("/sync", async (req, res) => {
-  const { initData } = req.body;
+  try {
+    const { initData, gems, level } = req.body;
 
-  const auth = verifyInitData(initData, BOT_TOKEN);
-  if (!auth) return res.status(403).json({ ok: false, error: "INVALID_DATA" });
+    const data = verifyInitData(initData, BOT_TOKEN);
+    if (!data || !data.user) {
+      return res.status(403).json({ success: false, error: "INVALID_INITDATA" });
+    }
 
-  const userId = auth.user?.id;
-  const player = await Player.findOne({ userId });
+    const tgUser = JSON.parse(data.user);
+    const userId  = String(tgUser.id);
+    const username  = tgUser.username || tgUser.first_name || "Player";
+    const firstName = tgUser.first_name || "";
+    const lastName  = tgUser.last_name || "";
 
-  res.json({
-    ok: true,
-    exists: !!player,
-    player: player || null,
-  });
-});
+    const safeGems  = Number.isFinite(+gems)  ? Math.max(0, Math.floor(+gems)) : 0;
+    const safeLevel = Number.isFinite(+level) ? Math.max(1, Math.floor(+level)) : 1;
 
-// ==============================
-//      API — COLLECT → TẠO USER TẠI ĐÂY
-// ==============================
-app.post("/collect", async (req, res) => {
-  const { initData, gems } = req.body;
+    const player = await Player.findOneAndUpdate(
+      { userId },
+      {
+        $set: {
+          username,
+          firstName,
+          lastName,
+          gems: safeGems,
+          level: safeLevel,
+        },
+      },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
 
-  const auth = verifyInitData(initData, BOT_TOKEN);
-  if (!auth) return res.status(403).json({ ok: false, error: "INVALID_DATA" });
-
-  const tgUser = auth.user;
-
-  let player = await Player.findOne({ userId: tgUser.id });
-
-  // CREATE IF NOT EXISTS — Only HERE!
-  if (!player) {
-    player = new Player({
-      userId: tgUser.id,
-      username: tgUser.username,
-      firstName: tgUser.first_name,
-      lastName: tgUser.last_name,
-      gems: 0,
+    return res.json({
+      success: true,
+      gems: player.gems,
+      level: player.level,
+      username: player.username,
     });
+  } catch (err) {
+    console.error("SYNC ERROR:", err);
+    return res.status(500).json({ success: false, error: "SERVER_ERROR" });
   }
-
-  player.gems += Number(gems || 0);
-  await player.save();
-
-  res.json({ ok: true, gems: player.gems });
 });
 
 // ==============================
-//      API — LEADERBOARD
+//      API — LEADERBOARD CHO FRONTEND
+//      Frontend expect: { success, leaderboard: [...] }
 // ==============================
 app.get("/leaderboard", async (req, res) => {
-  const top = await Player.find().sort({ gems: -1 }).limit(20);
-  res.json(top);
+  try {
+    const top = await Player.find().sort({ gems: -1 }).limit(20).lean();
+    const leaderboard = top.map((p) => ({
+      userId:   p.userId,
+      username: p.username || "NoName",
+      gems:     p.gems,
+      level:    p.level,
+    }));
+    return res.json({ success: true, leaderboard });
+  } catch (err) {
+    console.error("LEADERBOARD ERROR:", err);
+    return res.status(500).json({ success: false, error: "SERVER_ERROR" });
+  }
 });
 
 // ==============================
 //      RUN SERVER
 // ==============================
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`SERVER RUNNING on port ${PORT}`));
-
