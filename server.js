@@ -84,9 +84,12 @@ const validateInitData = (initData, botToken) => {
  */
 const sendWebAppLink = (ctx) => {
     const user = ctx.from;
+    // Lấy tên người dùng (ưu tiên firstName, nếu không có thì username, nếu không thì 'bạn')
+    const userName = user.first_name || user.username || 'bạn'; 
     console.log('Thông tin người dùng:', user);
 
-    ctx.reply('Chào mừng bạn đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.', {
+    // Cập nhật tin nhắn chào mừng để sử dụng tên người chơi
+    ctx.reply(`Chào mừng ${userName} đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.`, {
         reply_markup: {
             inline_keyboard: [
                 // Sử dụng MINI_APP_URL đã định nghĩa
@@ -109,6 +112,31 @@ bot.command('play', sendWebAppLink);
 const app = express();
 app.use(express.json()); 
 
+// START: THÊM ENDPOINT GET / ĐỂ KHẮC PHỤC LỖI "Cannot GET /"
+app.get('/', (req, res) => {
+    res.status(200).send(`
+        <html>
+            <head>
+                <title>Dragon Spirit App Backend</title>
+                <style>
+                    body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #111827; color: #E5E7EB; }
+                    h1 { color: #34D399; }
+                    p { color: #9CA3AF; }
+                    a { color: #60A5FA; text-decoration: none; font-weight: bold; }
+                    a:hover { text-decoration: underline; }
+                </style>
+            </head>
+            <body>
+                <h1>Dragon Spirit Mini App Backend</h1>
+                <p>Dịch vụ backend này đang chạy thành công.</p>
+                <p>Để truy cập ứng dụng, bạn cần mở bot Telegram và sử dụng lệnh /start hoặc nhấn nút 'Mở Mini App'.</p>
+                <p>Bot Token: ${BOT_TOKEN.substring(0, 10)}...</p>
+            </body>
+        </html>
+    `);
+});
+// END: THÊM ENDPOINT GET /
+
 // Cấu hình Webhook cho Telegraf (Thay thế bot.launch())
 // Render sử dụng cổng 10000, chúng ta cần dùng express để lắng nghe webhook
 app.use(bot.webhookCallback(`/bot/${BOT_TOKEN}`)); 
@@ -116,9 +144,23 @@ app.use(bot.webhookCallback(`/bot/${BOT_TOKEN}`));
 const WEBHOOK_URL = MINI_APP_URL + `/bot/${BOT_TOKEN}`; 
 
 // Thiết lập webhook cho Telegram API
+// Sử dụng promise chain để đảm bảo quá trình thiết lập hoàn tất và xử lý lỗi xung đột (409)
 bot.telegram.setWebhook(WEBHOOK_URL)
-    .then(() => console.log(`Telegram webhook set to: ${WEBHOOK_URL}`))
-    .catch(err => console.error('Error setting webhook:', err));
+    .then((result) => {
+        if (result) {
+            console.log(`[WEBHOOK SUCCESS] Telegram webhook set to: ${WEBHOOK_URL}`);
+        } else {
+            console.error(`[WEBHOOK FAILURE] setWebhook returned false for URL: ${WEBHOOK_URL}`);
+        }
+    })
+    .catch(err => {
+        // Log lỗi chi tiết, đặc biệt là lỗi 409 (Conflict)
+        console.error('Lỗi khi thiết lập Webhook:', err.message);
+        // Thử lấy thông tin webhook hiện tại để debug
+        bot.telegram.getWebhookInfo().then(info => {
+            console.log('Thông tin Webhook hiện tại:', info);
+        }).catch(infoErr => console.error('Không thể lấy thông tin webhook:', infoErr.message));
+    });
 
 
 app.post('/fetchUserData', async (req, res) => {
@@ -218,4 +260,3 @@ app.listen(PORT, () => {
 });
 
 // Đã loại bỏ bot.launch()
-
