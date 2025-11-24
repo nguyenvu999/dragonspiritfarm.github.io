@@ -7,14 +7,13 @@ import { Telegraf } from 'telegraf';
 const bot = new Telegraf('8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E');
 
 // Kết nối MongoDB Atlas
-mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  console.log('Kết nối MongoDB Atlas thành công');
-}).catch((error) => {
-  console.error('Lỗi kết nối MongoDB:', error);
-});
+mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority')
+  .then(() => {
+    console.log('Kết nối MongoDB Atlas thành công');
+  })
+  .catch((error) => {
+    console.error('Lỗi kết nối MongoDB:', error);
+  });
 
 // Cấu hình schema cho người chơi (Player)
 const playerSchema = new mongoose.Schema({
@@ -22,16 +21,51 @@ const playerSchema = new mongoose.Schema({
   username: { type: String },
   firstName: { type: String },
   lastName: { type: String },
-  gems: { type: Number, default: 0 },
+  gems: { type: Number, default: 0 },  // Thêm các thuộc tính như gems, level, v.v.
   level: { type: Number, default: 1 }
 });
 
 // Tạo model cho người chơi
 const Player = mongoose.model('Player', playerSchema, 'player');
 
+// Lệnh /start
+bot.start(async (ctx) => {
+  const user = ctx.from;  // Lấy thông tin người dùng
+  console.log('Thông tin người dùng:', user);
+
+  // Kiểm tra và lưu thông tin người chơi vào cơ sở dữ liệu (collection Player)
+  let existingPlayer = await Player.findOne({ userId: user.id });
+  if (!existingPlayer) {
+    const newPlayer = new Player({
+      userId: user.id,
+      username: user.username,
+      firstName: user.first_name,
+      lastName: user.last_name,
+    });
+    await newPlayer.save();
+    console.log('Người chơi mới đã được lưu:', user);
+  }
+
+  ctx.reply(`Chào ${user.first_name}! Nhấn /play để tiếp tục.`);
+});
+
+// Lệnh /play
+bot.command('play', (ctx) => {
+  const user = ctx.from;  // Lấy thông tin người dùng
+  console.log('Thông tin người dùng:', user);
+  
+  ctx.reply('Chào mừng bạn đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'Mở Mini App', web_app: { url: 'https://dragonspiritfarm.vercel.app/' } }],
+      ]
+    }
+  });
+});
+
 // API endpoint để nhận dữ liệu từ WebApp Telegram
 const app = express();
-app.use(express.json());
+app.use(express.json());  // Middleware to parse JSON requests
 
 // Xử lý webhook
 app.post('/webhook', async (req, res) => {
@@ -76,4 +110,9 @@ bot.telegram.setWebhook(webhookUrl).then(() => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Bắt đầu bot
+bot.launch().then(() => {
+  console.log("Bot đang hoạt động...");
 });
