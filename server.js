@@ -1,19 +1,26 @@
 import express from 'express';
 import mongoose from 'mongoose';
-import fetch from 'node-fetch';
+import crypto from 'crypto'; // Cần import module crypto để xác thực initData
 import { Telegraf } from 'telegraf';
 
-// Khởi tạo bot với token
-const bot = new Telegraf('8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E');
+// LƯU Ý QUAN TRỌNG: Bot token của bạn
+const BOT_TOKEN = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; 
+
+// URL CỦA MINI APP CỦA BẠN (CẦN THAY THẾ bằng URL triển khai thực tế của bạn)
+const MINI_APP_URL = 'https://dragonspiritfarm-git-main-nguyenvu999s-projects.vercel.app/'; 
+
+// Khởi tạo bot
+const bot = new Telegraf(BOT_TOKEN); 
 
 // Kết nối MongoDB Atlas
-mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority')
-  .then(() => {
-    console.log('Kết nối MongoDB Atlas thành công');
-  })
-  .catch((error) => {
-    console.error('Lỗi kết nối MongoDB:', error);
-  });
+mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => {
+  console.log('Kết nối MongoDB Atlas thành công');
+}).catch((error) => {
+  console.error('Lỗi kết nối MongoDB:', error);
+});
 
 // Cấu hình schema cho người chơi (Player)
 const playerSchema = new mongoose.Schema({
@@ -21,92 +28,179 @@ const playerSchema = new mongoose.Schema({
   username: { type: String },
   firstName: { type: String },
   lastName: { type: String },
-  gems: { type: Number, default: 0 },  // Thêm các thuộc tính như gems, level, v.v.
-  level: { type: Number, default: 1 }
+  gems: { type: Number, default: 0 }, // Giữ lại trạng thái game
+  level: { type: Number, default: 1 },
+  rate: { type: Number, default: 1 }, // Tốc độ tạo linh thạch
+  cost: { type: Number, default: 100 }, // Chi phí nâng cấp tiếp theo
+  // Thêm các trường liên quan đến trạng thái farm
+  isFarming: { type: Boolean, default: false },
+  farmEndTime: { type: Number, default: 0 },
 });
 
 // Tạo model cho người chơi
 const Player = mongoose.model('Player', playerSchema, 'player');
 
-// Lệnh /start
-bot.start(async (ctx) => {
-  const user = ctx.from;  // Lấy thông tin người dùng
-  console.log('Thông tin người dùng:', user);
 
-  // Kiểm tra và lưu thông tin người chơi vào cơ sở dữ liệu (collection Player)
-  let existingPlayer = await Player.findOne({ userId: user.id });
-  if (!existingPlayer) {
-    const newPlayer = new Player({
-      userId: user.id,
-      username: user.username,
-      firstName: user.first_name,
-      lastName: user.last_name,
-    });
-    await newPlayer.save();
-    console.log('Người chơi mới đã được lưu:', user);
-  }
-
-  ctx.reply(`Chào ${user.first_name}! Nhấn /play để tiếp tục.`);
-});
-
-// Lệnh /play
-bot.command('play', (ctx) => {
-  const user = ctx.from;  // Lấy thông tin người dùng
-  console.log('Thông tin người dùng:', user);
+/**
+ * Hàm xác thực initData của Telegram WebApp
+ * @param {string} initData - Chuỗi query parameter từ frontend
+ * @returns {object|null} - Thông tin user đã được xác thực, hoặc null nếu không hợp lệ
+ */
+const validateInitData = (initData, botToken) => {
+  const urlParams = new URLSearchParams(initData);
+  const hash = urlParams.get('hash');
+  urlParams.delete('hash');
   
-  ctx.reply('Chào mừng bạn đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.', {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: 'Mở Mini App', web_app: { url: 'https://dragonspiritfarm.vercel.app/' } }],
-      ]
+  // Sắp xếp các parameter theo thứ tự chữ cái và tạo chuỗi kiểm tra
+  const dataCheckString = Array.from(urlParams.entries())
+    .filter(([key]) => key !== 'hash')
+    .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  
+  // Tạo secret key bằng HMAC SHA256 với 'WebAppData' và token bot
+  const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+  
+  // Tạo hash cục bộ từ dataCheckString và secretKey
+  const calculatedHash = crypto.createHmac('sha256', secretKey)
+    .update(dataCheckString)
+    .digest('hex');
+  
+  if (calculatedHash === hash) {
+    // Nếu hash khớp, trích xuất user data
+    const userJson = urlParams.get('user');
+    if (userJson) {
+      return JSON.parse(userJson);
     }
-  });
-});
+  }
+  
+  return null;
+};
+
+// --- LOGIC LỆNH BOT ---
+
+/**
+ * Hàm gửi tin nhắn với nút "Mở Mini App"
+ * @param {object} ctx - Đối tượng ngữ cảnh Telegraf
+ */
+const sendWebAppLink = (ctx) => {
+    const user = ctx.from;
+    console.log('Thông tin người dùng:', user);
+
+    ctx.reply('Chào mừng bạn đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.', {
+        reply_markup: {
+            inline_keyboard: [
+                // Sử dụng MINI_APP_URL đã định nghĩa
+                [{ text: 'Mở Mini App', web_app: { url: MINI_APP_URL } }],
+            ]
+        }
+    });
+};
+
+// Đăng ký lệnh /start
+bot.start(sendWebAppLink);
+
+// Đăng ký lệnh /play
+bot.command('play', sendWebAppLink);
+
+// --- END LOGIC LỆNH BOT ---
+
 
 // API endpoint để nhận dữ liệu từ WebApp Telegram
 const app = express();
-app.use(express.json());  // Middleware to parse JSON requests
+app.use(express.json()); 
 
-// Xử lý webhook
-app.post('/webhook', async (req, res) => {
-  const update = req.body;
-
+app.post('/fetchUserData', async (req, res) => {
   try {
-    // Kiểm tra xem có phải update từ bot Telegram không
-    if (update && update.message) {
-      const user = update.message.from;
-      console.log('Thông tin người dùng:', user);
-
-      // Kiểm tra và lưu thông tin người chơi vào cơ sở dữ liệu (collection Player)
-      let existingPlayer = await Player.findOne({ userId: user.id });
-      if (!existingPlayer) {
-        const newPlayer = new Player({
-          userId: user.id,
-          username: user.username,
-          firstName: user.first_name,
-          lastName: user.last_name,
-        });
-        await newPlayer.save();
-        console.log('Người chơi mới đã được lưu:', user);
-      }
+    const { initData } = req.body;
+    
+    if (!initData) {
+      return res.status(400).json({ error: 'Missing initData' });
     }
 
-    // Trả lời với Telegram
-    res.sendStatus(200);
+    // 1. Xác thực initData
+    const telegramUser = validateInitData(initData, BOT_TOKEN);
+
+    if (!telegramUser) {
+      console.error('Xác thực initData thất bại!');
+      return res.status(401).json({ success: false, message: 'Invalid Telegram data signature' });
+    }
+
+    // 2. Kiểm tra và lưu/lấy thông tin người chơi vào cơ sở dữ liệu
+    const userId = String(telegramUser.id);
+    let player = await Player.findOne({ userId });
+    
+    if (!player) {
+      // Người chơi mới, tạo bản ghi mới với trạng thái mặc định
+      player = new Player({
+        userId,
+        username: telegramUser.username,
+        firstName: telegramUser.first_name,
+        lastName: telegramUser.last_name,
+        // Các giá trị mặc định sẽ được áp dụng
+      });
+      await player.save();
+      console.log('Người chơi mới đã được lưu:', player.firstName);
+    }
+
+    // 3. Trả về toàn bộ thông tin người chơi (bao gồm trạng thái game)
+    res.json({
+      success: true,
+      user: telegramUser, // Thông tin từ Telegram
+      gameState: { // Trạng thái game từ DB
+        level: player.level,
+        gems: player.gems,
+        rate: player.rate,
+        cost: player.cost,
+        isFarming: player.isFarming,
+        farmEndTime: player.farmEndTime,
+      }
+    });
+
   } catch (error) {
-    console.error('Lỗi khi xử lý webhook:', error);
-    res.status(500).send('Server Error');
+    console.error('Lỗi khi fetch user data:', error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while fetching user data',
+    });
   }
 });
 
-// Thiết lập webhook cho bot
-const webhookUrl = 'https://dragon-spirit-app.onrender.com/webhook';  // URL của webhook
+// API endpoint để cập nhật trạng thái game khi nâng cấp hoặc bắt đầu farm
+app.post('/updateGameState', async (req, res) => {
+    try {
+        const { initData, updates } = req.body;
 
-bot.telegram.setWebhook(webhookUrl).then(() => {
-  console.log('Webhook đã được thiết lập');
+        if (!initData || !updates) {
+            return res.status(400).json({ error: 'Missing initData or updates' });
+        }
+
+        const telegramUser = validateInitData(initData, BOT_TOKEN);
+        if (!telegramUser) {
+            return res.status(401).json({ success: false, message: 'Invalid Telegram data signature' });
+        }
+
+        const userId = String(telegramUser.id);
+        const player = await Player.findOne({ userId });
+
+        if (!player) {
+            return res.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        // Cập nhật các trường được gửi từ frontend
+        Object.assign(player, updates);
+        await player.save();
+
+        res.json({ success: true, gameState: player.toObject() });
+
+    } catch (error) {
+        console.error('Lỗi khi cập nhật trạng thái game:', error);
+        res.status(500).json({ success: false, message: 'Server error during update' });
+    }
 });
 
-// Bắt đầu server và lắng nghe
+
+// Port và start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
@@ -114,5 +208,5 @@ app.listen(PORT, () => {
 
 // Bắt đầu bot
 bot.launch().then(() => {
-  console.log("Bot đang hoạt động...");
+  console.log('Bot đang hoạt động...');
 });
