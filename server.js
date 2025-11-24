@@ -6,7 +6,9 @@ import { Telegraf } from 'telegraf';
 // LƯU Ý QUAN TRỌNG: Bot token của bạn
 const BOT_TOKEN = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; 
 
-// URL CỦA MINI APP CỦA BẠN (CẦN THAY THẾ bằng URL triển khai thực tế của bạn)
+// [MỚI] URL CỦA CHÍNH DỊCH VỤ BACKEND NÀY (Render URL)
+const BACKEND_API_URL = 'https://dragon-spirit-app.onrender.com'; 
+// URL CỦA MINI APP (Frontend - Vercel URL)
 const MINI_APP_URL = 'https://dragonspiritfarm-git-main-nguyenvu999s-projects.vercel.app/'; 
 
 // Khởi tạo bot
@@ -92,7 +94,7 @@ const sendWebAppLink = (ctx) => {
     ctx.reply(`Chào mừng ${userName} đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.`, {
         reply_markup: {
             inline_keyboard: [
-                // Sử dụng MINI_APP_URL đã định nghĩa
+                // SỬ DỤNG MINI_APP_URL (Vercel) cho nút bấm
                 [{ text: 'Mở Mini App', web_app: { url: MINI_APP_URL } }],
             ]
         }
@@ -129,8 +131,8 @@ app.get('/', (req, res) => {
             <body>
                 <h1>Dragon Spirit Mini App Backend</h1>
                 <p>Dịch vụ backend này đang chạy thành công.</p>
+                <p>Địa chỉ Webhook đang được sử dụng: ${BACKEND_API_URL}/bot/${BOT_TOKEN.substring(0, 5)}...</p>
                 <p>Để truy cập ứng dụng, bạn cần mở bot Telegram và sử dụng lệnh /start hoặc nhấn nút 'Mở Mini App'.</p>
-                <p>Bot Token: ${BOT_TOKEN.substring(0, 10)}...</p>
             </body>
         </html>
     `);
@@ -141,7 +143,8 @@ app.get('/', (req, res) => {
 // Render sử dụng cổng 10000, chúng ta cần dùng express để lắng nghe webhook
 app.use(bot.webhookCallback(`/bot/${BOT_TOKEN}`)); 
 
-const WEBHOOK_URL = MINI_APP_URL + `/bot/${BOT_TOKEN}`; 
+// Dùng BACKEND_API_URL (Render URL) để tạo Webhook URL
+const WEBHOOK_URL = BACKEND_API_URL + `/bot/${BOT_TOKEN}`; 
 
 // Thiết lập webhook cho Telegram API
 // Sử dụng promise chain để đảm bảo quá trình thiết lập hoàn tất và xử lý lỗi xung đột (409)
@@ -260,4 +263,3 @@ app.listen(PORT, () => {
 });
 
 // Đã loại bỏ bot.launch()
-
