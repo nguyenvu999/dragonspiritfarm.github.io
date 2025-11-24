@@ -7,16 +7,15 @@ import { Telegraf } from 'telegraf';
 const BOT_TOKEN = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; 
 
 // URL CỦA MINI APP CỦA BẠN (CẦN THAY THẾ bằng URL triển khai thực tế của bạn)
-const MINI_APP_URL = 'https://dragonspiritfarm-git-main-nguyenvu999s-projects.vercel.app/'; 
+const MINI_APP_URL = 'https://dragon-spirit-app.onrender.com'; 
 
 // Khởi tạo bot
 const bot = new Telegraf(BOT_TOKEN); 
 
 // Kết nối MongoDB Atlas
-mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
+// Đã loại bỏ các tùy chọn đã lỗi thời: useNewUrlParser và useUnifiedTopology
+mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority')
+.then(() => {
   console.log('Kết nối MongoDB Atlas thành công');
 }).catch((error) => {
   console.error('Lỗi kết nối MongoDB:', error);
@@ -109,6 +108,18 @@ bot.command('play', sendWebAppLink);
 // API endpoint để nhận dữ liệu từ WebApp Telegram
 const app = express();
 app.use(express.json()); 
+
+// Cấu hình Webhook cho Telegraf (Thay thế bot.launch())
+// Render sử dụng cổng 10000, chúng ta cần dùng express để lắng nghe webhook
+app.use(bot.webhookCallback(`/bot/${BOT_TOKEN}`)); 
+
+const WEBHOOK_URL = MINI_APP_URL + `/bot/${BOT_TOKEN}`; 
+
+// Thiết lập webhook cho Telegram API
+bot.telegram.setWebhook(WEBHOOK_URL)
+    .then(() => console.log(`Telegram webhook set to: ${WEBHOOK_URL}`))
+    .catch(err => console.error('Error setting webhook:', err));
+
 
 app.post('/fetchUserData', async (req, res) => {
   try {
@@ -206,7 +217,4 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
-// Bắt đầu bot
-bot.launch().then(() => {
-  console.log('Bot đang hoạt động...');
-});
+// Đã loại bỏ bot.launch()
