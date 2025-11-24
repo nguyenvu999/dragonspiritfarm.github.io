@@ -1,90 +1,96 @@
 import express from 'express';
-import axios from 'axios';
 import mongoose from 'mongoose';
+import fetch from 'node-fetch';  // Import node-fetch
+import { Telegraf } from 'telegraf';
 
-// MongoDB connection string
-const dbURI = 'mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority';
+// Khởi tạo bot với token
+const bot = new Telegraf('8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E');  // Thay 'YOUR_BOT_TOKEN' bằng token bot của bạn
 
-// MongoDB model for user data
-const User = mongoose.model('User', new mongoose.Schema({
-  userId: String,
-  firstName: String,
-  lastName: String,
-  username: String,
-  dateAdded: { type: Date, default: Date.now }
-}));
-
-// Initialize express app
-const app = express();
-
-// Middleware to parse JSON requests
-app.use(express.json());
-
-// MongoDB connection
-mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.log('MongoDB connection error: ', err));
-
-// /start webhook to handle bot start
-app.get('/start', async (req, res) => {
-  const { userId, firstName, username } = req.query; // Get user data from query params (Telegram passes these)
-  
-  if (!userId) {
-    return res.status(400).json({ error: 'User ID is required' });
-  }
-
-  try {
-    // Save user to MongoDB
-    const user = new User({ userId, firstName, username });
-    await user.save();
-
-    // Send back a response to launch the WebApp
-    const webAppUrl = 'https://dragonspiritfarm.vercel.app/';  // Replace with the actual URL of your WebApp
-    return res.redirect(webAppUrl); // This will redirect the user to your WebApp
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to handle /start command' });
-  }
+// Kết nối MongoDB Atlas
+mongoose.connect('mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => {
+  console.log('Kết nối MongoDB Atlas thành công');
+}).catch((error) => {
+  console.error('Lỗi kết nối MongoDB:', error);
 });
 
-// API endpoint to fetch user data (called from the WebApp)
+// Cấu hình schema cho người chơi (Player)
+const playerSchema = new mongoose.Schema({
+  userId: { type: String, required: true, unique: true },
+  username: { type: String },
+  firstName: { type: String },
+  lastName: { type: String },
+  gems: { type: Number, default: 0 },  // Thêm các thuộc tính như gems, level, v.v.
+  level: { type: Number, default: 1 }
+});
+
+// Tạo model cho người chơi
+const Player = mongoose.model('Player', playerSchema, 'player');
+
+// Lệnh /start
+bot.start(async (ctx) => {
+  const user = ctx.from;  // Lấy thông tin người dùng
+  console.log('Thông tin người dùng:', user);
+
+  // Kiểm tra và lưu thông tin người chơi vào cơ sở dữ liệu (collection Player)
+  let existingPlayer = await Player.findOne({ userId: user.id });
+  if (!existingPlayer) {
+    const newPlayer = new Player({
+      userId: user.id,
+      username: user.username,
+      firstName: user.first_name,
+      lastName: user.last_name,
+    });
+    await newPlayer.save();
+    console.log('Người chơi mới đã được lưu:', user);
+  }
+
+  ctx.reply(`Chào ${user.first_name}! Nhấn /play để tiếp tục.`);
+});
+
+// Lệnh /play
+bot.command('play', (ctx) => {
+  const user = ctx.from;  // Lấy thông tin người dùng
+  console.log('Thông tin người dùng:', user);
+  
+  ctx.reply('Chào mừng bạn đến với Nuôi Rồng Linh Thạch! 🎉\n\nNhấn nút dưới đây để bắt đầu trò chơi.', {
+    reply_markup: {
+      inline_keyboard: [
+        [{ text: 'Mở Mini App', web_app: { url: 'https://dragonspiritfarm.vercel.app/' } }],
+      ]
+    }
+  });
+});
+
+
+// API endpoint để nhận dữ liệu từ WebApp Telegram
+const app = express();
+app.use(express.json());  // Middleware to parse JSON requests
+
 app.post('/fetchUserData', async (req, res) => {
   try {
     const { initData } = req.body;
-
+    
     if (!initData) {
       return res.status(400).json({ error: 'Missing initData' });
     }
 
-    // Bot token for your Telegram bot
-    const botToken = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; // Replace with your bot's token
+    // Bot token và URL cho Telegram bot
+    const botToken = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; // Thay 'YOUR_BOT_TOKEN' bằng token bot của bạn
 
-    // Fetch user data from Telegram WebApp
-    const response = await axios.post(`https://api.telegram.org/bot${botToken}/webAppData`, {
-      initData: initData,
+    // Fetch user data từ Telegram WebApp
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/webAppData`, {
+      method: 'POST',
+      body: JSON.stringify({ initData }),
+      headers: { 'Content-Type': 'application/json' }
     });
 
-    const userData = response.data;
+    const userData = await response.json();
 
     if (userData.ok) {
-      // Save the user to MongoDB (if not already stored)
-      const { id, first_name, last_name, username } = userData.result;
-      
-      // Check if the user already exists
-      let user = await User.findOne({ userId: id });
-
-      if (!user) {
-        // Create new user if not found
-        user = new User({
-          userId: id,
-          firstName: first_name,
-          lastName: last_name,
-          username
-        });
-        await user.save();
-      }
-
-      // Return user data if successful
+      // Trả về dữ liệu người dùng nếu thành công
       res.json({
         success: true,
         user: userData.result,
@@ -104,8 +110,13 @@ app.post('/fetchUserData', async (req, res) => {
   }
 });
 
-// Port and start server
+// Port và start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+});
+
+// Bắt đầu bot
+bot.launch().then(() => {
+  console.log("Bot đang hoạt động...");
 });
