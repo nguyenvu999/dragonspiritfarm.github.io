@@ -7,7 +7,7 @@ import { Telegraf } from 'telegraf';
 const BOT_TOKEN = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; 
 
 // URL CỦA MINI APP CỦA BẠN (CẦN THAY THẾ bằng URL triển khai thực tế của bạn)
-const MINI_APP_URL = 'https://dragon-spirit-app.onrender.com'; 
+const MINI_APP_URL = 'https://dragonspiritfarm-git-main-nguyenvu999s-projects.vercel.app/'; 
 
 // Khởi tạo bot
 const bot = new Telegraf(BOT_TOKEN); 
@@ -218,3 +218,4 @@ app.listen(PORT, () => {
 });
 
 // Đã loại bỏ bot.launch()
+
