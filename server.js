@@ -1,200 +1,75 @@
-// ==============================
-//        CONFIG
-// ==============================
-const BOT_TOKEN = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; // Đặt token của bot Telegram vào đây
-const MONGO_URL = 'mongodb+srv://nguyenvu99:nguyenvu@dragongame.th1vjjp.mongodb.net/dragon_game?retryWrites=true&w=majority'; // Đặt URL kết nối MongoDB vào đây
-const WEBAPP_URL = 'YOUR_WEBAPP_URL'; // Đặt URL của ứng dụng Mini App vào đây
-const BACKEND_URL = 'https://dragon-spirit-app.onrender.com'; // Đặt URL của backend vào đây
-
-// ==============================
-//        IMPORT MODULES
-// ==============================
-const express = require("express");
-const mongoose = require("mongoose");
-const cors = require("cors");
-const helmet = require("helmet");
-const crypto = require("crypto");
-const { Telegraf } = require("telegraf");
-
-// ==============================
-//        INIT EXPRESS APP
-// ==============================
+const express = require('express');
+const { Telegraf } = require('telegraf');
+const axios = require('axios');
 const app = express();
-app.use(cors());
-app.use(helmet());
+
+// Middleware để parse JSON requests
 app.use(express.json());
 
-// ==============================
-//        TELEGRAM BOT
-// ==============================
+// Cấu hình token bot Telegram và WebApp URL
+const BOT_TOKEN = '8327237691:AAGcQRJQQjtzxhWSZo3JvFE2qOADvidHd1E'; // Thay bằng Bot Token của bạn
+const WEB_APP_URL = 'https://dragonspiritfarm.vercel.app/'; // Thay bằng URL WebApp của bạn
+
+// Tạo bot Telegram từ token
 const bot = new Telegraf(BOT_TOKEN);
 
-// Webhook instead of polling
-app.use(bot.webhookCallback("/telegram-bot"));
-bot.telegram.setWebhook(BACKEND_URL + "/telegram-bot");
-
-// ==============================
-//        START / PLAY
-// ==============================
+// Lắng nghe lệnh /start từ người dùng
 bot.start((ctx) => {
-  ctx.reply(
-    `🐉 Chào ${ctx.from.first_name}!\nBấm nút để mở Mini App.`,
+  // Gửi thông báo có nút để mở WebApp
+  ctx.reply("Chào bạn! Hãy bắt đầu trò chơi. Nhấn vào nút dưới đây để bắt đầu.",
     {
       reply_markup: {
         inline_keyboard: [
-          [
-            {
-              text: "🚀 Mở Game",
-              web_app: { url: WEBAPP_URL }
-            }
-          ]
+          [{ text: "Mở ứng dụng", web_app: { url: WEB_APP_URL } }] // Đưa vào URL WebApp
         ]
       }
-    }
-  );
-});
-
-bot.command("play", (ctx) => {
-  ctx.reply("Nhấn để mở game:", {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: "🚀 Mở Mini App",
-            web_app: { url: WEBAPP_URL }
-          }
-        ]
-      ]
-    }
-  });
-});
-
-// ==============================
-//        DATABASE
-// ==============================
-mongoose
-  .connect(MONGO_URL)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.error(err));
-
-const PlayerSchema = new mongoose.Schema({
-  userId: { type: String, unique: true },
-  username: String,
-  gems: { type: Number, default: 0 },
-  level: { type: Number, default: 1 },
-});
-
-const Player = mongoose.model("Player", PlayerSchema);
-
-// ==============================
-//   VERIFY TELEGRAM initData
-// ==============================
-function verifyInitData(initData, botToken) {
-  if (!initData) return null;
-
-  const encoded = decodeURIComponent(initData);
-  const params = new URLSearchParams(encoded);
-
-  const hash = params.get("hash");
-  params.delete("hash");
-
-  const dataCheckString = [...params.entries()]
-    .map(([key, val]) => `${key}=${val}`)
-    .sort()
-    .join("\n");
-
-  const secret = crypto
-    .createHmac("sha256", "WebAppData")
-    .update(botToken)
-    .digest();
-
-  const calcHash = crypto
-    .createHmac("sha256", secret)
-    .update(dataCheckString)
-    .digest("hex");
-
-  if (calcHash !== hash) return null;
-
-  return Object.fromEntries(params.entries());
-}
-
-// ==============================
-//        API — SYNC USER
-// ==============================
-app.post("/sync", async (req, res) => {
-  const { initData, level, gems } = req.body;
-
-  const auth = verifyInitData(initData, BOT_TOKEN);
-  if (!auth || !auth.user) {
-    return res.json({ success: false, error: "INVALID_INITDATA" });
-  }
-
-  const uid = auth.user.id;
-  const username = auth.user.username || "Player";
-
-  let p = await Player.findOne({ userId: uid });
-  if (!p) {
-    p = new Player({
-      userId: uid,
-      username,
-      level,
-      gems,
     });
-  } else {
-    p.level = level;
-    p.gems = gems;
-  }
-
-  await p.save();
-
-  res.json({ success: true, gems: p.gems, level: p.level });
 });
 
-// ==============================
-//        API — COLLECT
-// ==============================
-app.post("/collect", async (req, res) => {
-  const { initData, amount } = req.body;
+// Lắng nghe sự kiện webhook và khởi chạy bot
+bot.launch()
+  .then(() => console.log('Bot is running...'))
+  .catch((err) => console.error('Error starting the bot:', err));
 
-  const auth = verifyInitData(initData, BOT_TOKEN);
-  if (!auth || !auth.user) {
-    return res.json({ success: false, error: "INVALID_INITDATA" });
+// API endpoint để nhận dữ liệu từ WebApp Telegram
+app.post('/fetchUserData', async (req, res) => {
+  try {
+    const { initData } = req.body;
+
+    if (!initData) {
+      return res.status(400).json({ error: 'Missing initData' });
+    }
+
+    // Fetch thông tin người dùng từ Telegram WebApp
+    const response = await axios.post(`https://api.telegram.org/bot${BOT_TOKEN}/webAppData`, {
+      initData: initData,
+    });
+
+    const userData = response.data;
+
+    if (userData.ok) {
+      // Trả về dữ liệu người dùng nếu thành công
+      res.json({
+        success: true,
+        user: userData.result,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch user data from Telegram',
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: 'An error occurred while fetching user data',
+    });
   }
-
-  const uid = auth.user.id;
-  const username = auth.user.username || "Player";
-
-  let p = await Player.findOne({ userId: uid });
-  if (!p) {
-    p = new Player({ userId: uid, username });
-  }
-
-  p.gems += Number(amount || 0);
-  await p.save();
-
-  res.json({ success: true, gems: p.gems });
 });
 
-// ==============================
-//        API — LEADERBOARD
-// ==============================
-app.get("/leaderboard", async (req, res) => {
-  const top = await Player.find().sort({ gems: -1 }).limit(20);
-
-  res.json({
-    success: true,
-    leaderboard: top.map((p) => ({
-      username: p.username,
-      gems: p.gems,
-    })),
-  });
+// Chạy server trên port 5000
+const PORT = 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
 });
-
-// ==============================
-//        RUN SERVER
-// ==============================
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () =>
-  console.log("SERVER RUNNING on port " + PORT)
-);
